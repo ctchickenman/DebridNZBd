@@ -18,9 +18,9 @@ See [docs/architecture.md](docs/architecture.md) for full design documentation.
 ## Project Structure
 
 ```
-debridnzd/
+debridnzbd/
   app.py              # FastAPI app factory, lifespan handler
-  __main__.py          # Entry point: python -m debridnzd
+  __main__.py          # Entry point: python -m debridnzbd
   api/
     router.py          # Main ?mode=XXX dispatcher
     queue.py           # Queue API modes
@@ -66,7 +66,7 @@ pip install -e ".[dev]"
 pytest
 
 # Run in development mode
-uvicorn debridnzd.app:create_app --factory --reload
+uvicorn debridnzbd.app:create_app --factory --reload
 ```
 
 ## SABnzbd API Compatibility
@@ -103,5 +103,5 @@ Modes with no Torbox equivalent return valid empty/default SABnzbd responses:
 - **nzo_id format:** `SABnzbd_nzo_<10 hex chars>` — matches SABnzbd pattern
 - **Config sections:** `misc`, `folders`, `torbox`, `switches`, `notifications`, `sorting`, `special`
 - **All API responses** follow SABnzbd JSON format: `{"status": true, ...}` or `{"error": "message"}`
-- **Database:** Single SQLite file at `<admin_dir>/debridnzd.db`
+- **Database:** Single SQLite file at `<admin_dir>/debridnzbd.db`
 - **Tests:** Use pytest-asyncio with mocked Torbox responses (httpx respx)

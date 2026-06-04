@@ -15,9 +15,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from debridnzd.db.database import Database
-from debridnzd.core.config_store import ConfigStore
-from debridnzd.app import create_app
+from debridnzbd.db.database import Database
+from debridnzbd.core.config_store import ConfigStore
+from debridnzbd.app import create_app
 
 
 @pytest_asyncio.fixture
@@ -30,7 +30,7 @@ async def app_client(tmp_path: Path):
     for dir_name in ["admin", "downloads/incomplete", "downloads/complete", "logs", "scripts"]:
         (tmp_path / dir_name).mkdir(parents=True, exist_ok=True)
 
-    db_path = tmp_path / "admin" / "debridnzd.db"
+    db_path = tmp_path / "admin" / "debridnzbd.db"
     database = Database(db_path)
     await database.initialize()
     config = ConfigStore(database)
@@ -256,7 +256,7 @@ class TestConfigStoreSecurity:
     @pytest.mark.asyncio
     async def test_set_rejects_oversized_value(self, tmp_path: Path) -> None:
         """ConfigStore.set() should reject values exceeding MAX_VALUE_LENGTH."""
-        from debridnzd.core.config_store import MAX_VALUE_LENGTH
+        from debridnzbd.core.config_store import MAX_VALUE_LENGTH
 
         db_path = tmp_path / "test.db"
         database = Database(db_path)
@@ -384,7 +384,7 @@ class TestDiskspaceSecurity:
 
     def test_validate_path_rejects_unauthorized(self) -> None:
         """_validate_path should reject paths outside allowed directories."""
-        from debridnzd.utils.diskspace import _validate_path, set_allowed_dirs
+        from debridnzbd.utils.diskspace import _validate_path, set_allowed_dirs
 
         set_allowed_dirs(["/tmp/test_allowed"])
         with pytest.raises(ValueError, match="outside allowed"):
@@ -392,7 +392,7 @@ class TestDiskspaceSecurity:
 
     def test_validate_path_allows_authorized(self) -> None:
         """_validate_path should accept paths under allowed directories."""
-        from debridnzd.utils.diskspace import _validate_path, set_allowed_dirs
+        from debridnzbd.utils.diskspace import _validate_path, set_allowed_dirs
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -402,7 +402,7 @@ class TestDiskspaceSecurity:
 
     def test_validate_path_rejects_traversal(self) -> None:
         """_validate_path should reject path traversal attempts."""
-        from debridnzd.utils.diskspace import _validate_path, set_allowed_dirs
+        from debridnzbd.utils.diskspace import _validate_path, set_allowed_dirs
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -412,7 +412,7 @@ class TestDiskspaceSecurity:
 
     def test_get_disk_usage_refuses_missing_dir(self) -> None:
         """get_disk_usage should not create directories."""
-        from debridnzd.utils.diskspace import get_disk_usage, set_allowed_dirs
+        from debridnzbd.utils.diskspace import get_disk_usage, set_allowed_dirs
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -423,7 +423,7 @@ class TestDiskspaceSecurity:
 
     def test_no_allowed_dirs_raises_error(self) -> None:
         """get_disk_usage should raise ValueError if no allowed dirs are configured."""
-        from debridnzd.utils.diskspace import get_disk_usage, set_allowed_dirs
+        from debridnzbd.utils.diskspace import get_disk_usage, set_allowed_dirs
 
         set_allowed_dirs([])  # Clear allowed dirs
         with pytest.raises(ValueError, match="No allowed directories"):

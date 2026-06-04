@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from pathlib import Path
 
-from debridnzd.db.database import Database, init_database, close_database, SCHEMA_VERSION
+from debridnzbd.db.database import Database, init_database, close_database, SCHEMA_VERSION
 
 
 @pytest_asyncio.fixture
@@ -18,7 +18,7 @@ async def db(tmp_path: Path) -> Database:
     Uses a unique temp directory so tests don't interfere with each other.
     The database is initialized (migrations run) before returning.
     """
-    db_path = tmp_path / "test_debridnzd.db"
+    db_path = tmp_path / "test_debridnzbd.db"
     database = Database(db_path)
     await database.initialize()
     yield database
@@ -337,7 +337,7 @@ class TestGlobalDatabase:
     @pytest.mark.asyncio
     async def test_init_database_creates_global(self, tmp_path: Path) -> None:
         """init_database sets the module-level db singleton."""
-        from debridnzd.db import database as db_module
+        from debridnzbd.db import database as db_module
 
         db_path = tmp_path / "global_test.db"
         result = await init_database(db_path)
@@ -352,6 +352,6 @@ class TestGlobalDatabase:
     @pytest.mark.asyncio
     async def test_close_database_is_idempotent(self, tmp_path: Path) -> None:
         """close_database can be called even if db is None."""
-        from debridnzd.db import database as db_module
+        from debridnzbd.db import database as db_module
         db_module.db = None
         await close_database()  # Should not raise

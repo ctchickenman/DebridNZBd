@@ -12,8 +12,8 @@ import time
 
 from fastapi.responses import JSONResponse
 
-from debridnzd.db.models import ServerInfo, StatusResponse, WarningEntry, WarningsResponse
-from debridnzd.utils.format import format_size, format_speed, format_uptime
+from debridnzbd.db.models import ServerInfo, StatusResponse, WarningEntry, WarningsResponse
+from debridnzbd.utils.format import format_size, format_speed, format_uptime
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ async def _build_status_response(params: dict) -> JSONResponse:
     start_time = getattr(request.app.state, "start_time", time.time()) if request else time.time()
 
     # Version
-    from debridnzd.utils.version import VERSION
+    from debridnzbd.utils.version import VERSION
 
     # Torbox connection status
     torbox_connected = False
@@ -109,7 +109,7 @@ async def _build_status_response(params: dict) -> JSONResponse:
     diskspace2 = "0"
     if config:
         try:
-            from debridnzd.utils.diskspace import get_disk_usage
+            from debridnzbd.utils.diskspace import get_disk_usage
 
             download_dir = await config.get("folders", "download_dir", "downloads/incomplete")
             complete_dir = await config.get("folders", "complete_dir", "downloads/complete")

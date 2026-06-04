@@ -25,7 +25,7 @@ from typing import Any
 
 import aiosqlite
 
-from debridnzd.db.database import Database
+from debridnzbd.db.database import Database
 
 logger = logging.getLogger(__name__)
 

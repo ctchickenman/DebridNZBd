@@ -1,11 +1,11 @@
-"""Entry point for python -m debridnzd."""
+"""Entry point for python -m debridnzbd."""
 
 import uvicorn
 
 
 def main():
     uvicorn.run(
-        "debridnzd.app:create_app",
+        "debridnzbd.app:create_app",
         factory=True,
         host="127.0.0.1",
         port=8080,

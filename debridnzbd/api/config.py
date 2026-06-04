@@ -10,7 +10,7 @@ import logging
 
 from fastapi.responses import JSONResponse
 
-from debridnzd.db.models import CategoriesResponse, ConfigResponse, ScriptsResponse
+from debridnzbd.db.models import CategoriesResponse, ConfigResponse, ScriptsResponse
 
 logger = logging.getLogger(__name__)
 

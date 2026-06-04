@@ -24,7 +24,7 @@ import logging
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
-from debridnzd.api.queue import (
+from debridnzbd.api.queue import (
     handle_addurl,
     handle_queue,
     handle_pause,
@@ -36,21 +36,21 @@ from debridnzd.api.queue import (
     handle_priority,
     handle_speedlimit,
 )
-from debridnzd.api.history import handle_history, handle_retry, handle_retry_all
-from debridnzd.api.status import (
+from debridnzbd.api.history import handle_history, handle_retry, handle_retry_all
+from debridnzbd.api.status import (
     handle_status,
     handle_fullstatus,
     handle_warnings,
     handle_server_stats,
 )
-from debridnzd.api.config import (
+from debridnzbd.api.config import (
     handle_get_config,
     handle_set_config,
     handle_del_config,
     handle_get_cats,
     handle_get_scripts,
 )
-from debridnzd.utils.version import VERSION
+from debridnzbd.utils.version import VERSION
 
 logger = logging.getLogger(__name__)
 

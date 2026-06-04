@@ -3,18 +3,18 @@
 ## Executive Summary
 
 A comprehensive security audit was performed across all implemented modules:
-- `debridnzd/torbox/client.py` — Torbox API HTTP client
-- `debridnzd/torbox/exceptions.py` — Exception hierarchy
-- `debridnzd/torbox/models.py` — Pydantic response models
-- `debridnzd/api/auth.py` — Authentication middleware
-- `debridnzd/api/router.py` — API router/dispatcher
-- `debridnzd/core/config_store.py` — Configuration store
-- `debridnzd/db/database.py` — SQLite database
-- `debridnzd/db/models.py` — SABnzbd response models
-- `debridnzd/app.py` — FastAPI app factory
-- `debridnzd/utils/diskspace.py` — Disk space utility
-- `debridnzd/utils/nzo_id.py` — ID generation
-- `debridnzd/__main__.py` — Entry point
+- `debridnzbd/torbox/client.py` — Torbox API HTTP client
+- `debridnzbd/torbox/exceptions.py` — Exception hierarchy
+- `debridnzbd/torbox/models.py` — Pydantic response models
+- `debridnzbd/api/auth.py` — Authentication middleware
+- `debridnzbd/api/router.py` — API router/dispatcher
+- `debridnzbd/core/config_store.py` — Configuration store
+- `debridnzbd/db/database.py` — SQLite database
+- `debridnzbd/db/models.py` — SABnzbd response models
+- `debridnzbd/app.py` — FastAPI app factory
+- `debridnzbd/utils/diskspace.py` — Disk space utility
+- `debridnzbd/utils/nzo_id.py` — ID generation
+- `debridnzbd/__main__.py` — Entry point
 
 **52 findings** were identified across four audit rounds (25 in round 1, 8 in round 2, 14 in round 3, 5 new in round 4). All CRITICAL and HIGH findings have been **fixed**. Remaining MEDIUM/LOW/INFO findings are documented with mitigations.
 

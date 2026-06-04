@@ -24,11 +24,11 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from debridnzd.api.auth import auth_middleware
-from debridnzd.api.router import router as api_router
-from debridnzd.core.config_store import ConfigStore
-from debridnzd.db.database import Database, init_database, close_database
-from debridnzd.utils.diskspace import set_allowed_dirs
+from debridnzbd.api.auth import auth_middleware
+from debridnzbd.api.router import router as api_router
+from debridnzbd.core.config_store import ConfigStore
+from debridnzbd.db.database import Database, init_database, close_database
+from debridnzbd.utils.diskspace import set_allowed_dirs
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ DEFAULT_INCOMPLETE_DIR = "downloads/incomplete"
 def setup_logging(log_dir: str = "logs", debug: bool = False) -> None:
     """Configure application-level logging with file and console output.
 
-    Creates a RotatingFileHandler that writes to ``{log_dir}/debridnzd.log``
+    Creates a RotatingFileHandler that writes to ``{log_dir}/debridnzbd.log``
     (10 MB max per file, 5 backups) and a StreamHandler for console output.
     The log level is set to DEBUG when ``debug`` is True, otherwise INFO.
 
@@ -76,7 +76,7 @@ def setup_logging(log_dir: str = "logs", debug: bool = False) -> None:
     )
 
     # Rotating file handler — 10 MB per file, keep 5 backups
-    log_file = Path(log_dir) / "debridnzd.log"
+    log_file = Path(log_dir) / "debridnzbd.log"
     file_handler = logging.handlers.RotatingFileHandler(
         str(log_file),
         maxBytes=10 * 1024 * 1024,
@@ -155,7 +155,7 @@ async def lifespan(app: FastAPI):
         logger.warning("Could not set admin directory permissions (may not be supported): %s", admin_path)
 
     # --- Initialize database ---
-    db_path = Path(DEFAULT_ADMIN_DIR) / "debridnzd.db"
+    db_path = Path(DEFAULT_ADMIN_DIR) / "debridnzbd.db"
     database = await init_database(db_path)
     logger.info("Database initialized at %s", db_path)
 
@@ -171,7 +171,7 @@ async def lifespan(app: FastAPI):
     set_allowed_dirs([download_dir, complete_dir, admin_dir])
 
     # --- Clean up stale temp files from interrupted downloads ---
-    from debridnzd.core.cdn_downloader import cleanup_stale_temp_files
+    from debridnzbd.core.cdn_downloader import cleanup_stale_temp_files
     removed = cleanup_stale_temp_files(complete_dir)
     if removed:
         logger.info("Cleaned up %d stale temp file(s) from %s", removed, complete_dir)
@@ -221,7 +221,7 @@ async def lifespan(app: FastAPI):
 
     # --- Start state sync poller ---
     import asyncio
-    from debridnzd.core.state_sync import run_cdn_processor, run_state_sync
+    from debridnzbd.core.state_sync import run_cdn_processor, run_state_sync
 
     sync_cancelled = asyncio.Event()
     sync_task = asyncio.create_task(run_state_sync(app, sync_cancelled))
@@ -234,7 +234,7 @@ async def lifespan(app: FastAPI):
     app.state.cdn_task = cdn_task
     app.state.cdn_cancelled = cdn_cancelled
 
-    from debridnzd import __version__
+    from debridnzbd import __version__
     logger.info("DebridNZBd v%s ready", __version__)
 
     yield  # Application is running
@@ -276,7 +276,7 @@ def create_app() -> FastAPI:
     Returns:
         A configured FastAPI application instance.
     """
-    from debridnzd import __version__
+    from debridnzbd import __version__
 
     app = FastAPI(
         title="DebridNZBd",
@@ -351,7 +351,7 @@ def create_app() -> FastAPI:
 
     # Include web UI routes (root /, /history, /config, /status, etc.)
     # Must be included before the static mount so route matching works.
-    from debridnzd.web.routes import router as web_router
+    from debridnzbd.web.routes import router as web_router
     app.include_router(web_router)
 
     # Mount static files for the web UI

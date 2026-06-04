@@ -8,8 +8,8 @@ import pytest
 import pytest_asyncio
 from pathlib import Path
 
-from debridnzd.db.database import Database
-from debridnzd.core.config_store import ConfigStore, CONFIG_DEFAULTS
+from debridnzbd.db.database import Database
+from debridnzbd.core.config_store import ConfigStore, CONFIG_DEFAULTS
 
 
 @pytest_asyncio.fixture
@@ -403,7 +403,7 @@ class TestSecurityProtections:
     @pytest.mark.asyncio
     async def test_set_rejects_oversized_section_name(self, store: ConfigStore) -> None:
         """set() must reject section names exceeding MAX_NAME_LENGTH."""
-        from debridnzd.core.config_store import MAX_NAME_LENGTH
+        from debridnzbd.core.config_store import MAX_NAME_LENGTH
         long_section = "a" * (MAX_NAME_LENGTH + 1)
         with pytest.raises(ValueError, match="Section name exceeds maximum length"):
             await store.set(long_section, "key", "value")
@@ -411,7 +411,7 @@ class TestSecurityProtections:
     @pytest.mark.asyncio
     async def test_set_rejects_oversized_keyword_name(self, store: ConfigStore) -> None:
         """set() must reject keyword names exceeding MAX_NAME_LENGTH."""
-        from debridnzd.core.config_store import MAX_NAME_LENGTH
+        from debridnzbd.core.config_store import MAX_NAME_LENGTH
         long_keyword = "a" * (MAX_NAME_LENGTH + 1)
         with pytest.raises(ValueError, match="Keyword name exceeds maximum length"):
             await store.set("switches", long_keyword, "value")

@@ -24,7 +24,7 @@ from typing import Any
 from fastapi import Request
 from starlette.responses import JSONResponse
 
-from debridnzd.core.config_store import ConfigStore
+from debridnzbd.core.config_store import ConfigStore
 
 logger = logging.getLogger(__name__)
 

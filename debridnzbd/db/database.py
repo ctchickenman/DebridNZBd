@@ -1,7 +1,7 @@
 """Database management for DebridNZBd.
 
 Provides async SQLite connection management, schema creation, and migration
-support. The database is a single file at `<admin_dir>/debridnzd.db` and
+support. The database is a single file at `<admin_dir>/debridnzbd.db` and
 stores all persistent state: configuration, download queue, history,
 categories, sorters, schedules, and warnings.
 """
@@ -28,7 +28,7 @@ class Database:
     Handles connection lifecycle, schema initialization, and migrations.
     Usage::
 
-        db = Database(Path("admin/debridnzd.db"))
+        db = Database(Path("admin/debridnzbd.db"))
         await db.initialize()
         # ... use db.conn for queries ...
         await db.close()
@@ -371,7 +371,7 @@ class Database:
 # ------------------------------------------------------------------ #
 
 # Global database instance — initialized by the app lifespan handler
-# and used throughout the application via `from debridnzd.db.database import db`.
+# and used throughout the application via `from debridnzbd.db.database import db`.
 db: Database | None = None
 
 

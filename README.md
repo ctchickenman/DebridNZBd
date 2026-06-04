@@ -29,20 +29,20 @@ Create a `docker-compose.yml`:
 
 ```yaml
 services:
-  debridnzd:
-    image: ghcr.io/ctchickenman/debridnzd:latest
-    container_name: debridnzd
+  debridnzbd:
+    image: ghcr.io/ctchickenman/debridnzbd:latest
+    container_name: debridnzbd
     ports:
       - "8080:8080"
     volumes:
-      - debridnzd-data:/data
+      - debridnzbd-data:/data
       - /path/to/downloads:/data/downloads
     environment:
       - TZ=UTC
     restart: unless-stopped
 
 volumes:
-  debridnzd-data:
+  debridnzbd-data:
 ```
 
 Then run:
@@ -55,13 +55,13 @@ docker compose up -d
 
 ```bash
 docker run -d \
-  --name debridnzd \
+  --name debridnzbd \
   -p 8080:8080 \
-  -v debridnzd-data:/data \
+  -v debridnzbd-data:/data \
   -v /path/to/downloads:/data/downloads \
   -e TZ=UTC \
   --restart unless-stopped \
-  ghcr.io/ctchickenman/debridnzd:latest
+  ghcr.io/ctchickenman/debridnzbd:latest
 ```
 
 #### Building from source
@@ -94,10 +94,10 @@ chown -R 1000:1000 /path/to/downloads
 pip install -e .
 
 # Run
-debridnzd
+debridnzbd
 
 # Or with Python directly
-python -m debridnzd
+python -m debridnzbd
 ```
 
 ## Configuration
@@ -136,7 +136,7 @@ pip install -e ".[dev]"
 pytest
 
 # Run in development mode
-uvicorn debridnzd.app:create_app --factory --reload
+uvicorn debridnzbd.app:create_app --factory --reload
 ```
 
 ## License

@@ -6,10 +6,10 @@
 #  2. Runtime — copies the venv into a minimal image, runs as non-root #
 #                                                                      #
 #  Build:                                                              #
-#    docker build -t debridnzd:latest .                                #
+#    docker build -t debridnzbd:latest .                                #
 #                                                                      #
 #  Run:                                                                #
-#    docker run -p 8080:8080 -v debridnzd-data:/data debridnzd:latest  #
+#    docker run -p 8080:8080 -v debridnzbd-data:/data debridnzbd:latest  #
 #                                                                      #
 #  All data (database, downloads, config, logs) is stored in /data.    #
 #  The application uses relative paths from the working directory,     #
@@ -23,19 +23,19 @@ WORKDIR /build
 
 # Copy only what's needed for installation.
 # pyproject.toml + README.md are needed by hatchling for metadata.
-# debridnzd/ is the package source.
+# debridnzbd/ is the package source.
 COPY pyproject.toml README.md ./
-COPY debridnzd/ debridnzd/
+COPY debridnzbd/ debridnzbd/
 
 # Create a virtual environment and install the package with extras.
 # [notifications] includes apprise for push notifications.
 # guessit is installed separately for sorting support.
 # --no-cache-dir reduces image size by not caching pip downloads.
 # --disable-pip-version-check avoids unnecessary network requests.
-RUN python -m venv /opt/debridnzd && \
-    /opt/debridnzd/bin/pip install --no-cache-dir --disable-pip-version-check \
+RUN python -m venv /opt/debridnzbd && \
+    /opt/debridnzbd/bin/pip install --no-cache-dir --disable-pip-version-check \
     ".[notifications]" && \
-    /opt/debridnzd/bin/pip install --no-cache-dir --disable-pip-version-check \
+    /opt/debridnzbd/bin/pip install --no-cache-dir --disable-pip-version-check \
     guessit
 
 
@@ -46,27 +46,27 @@ FROM python:3.12-slim-bookworm
 LABEL org.opencontainers.image.title="DebridNZBd" \
       org.opencontainers.image.description="SABnzbd-compatible API server powered by Torbox" \
       org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.source="https://github.com/user/debridnzd" \
+      org.opencontainers.image.source="https://github.com/user/debridnzbd" \
       org.opencontainers.image.licenses="MIT"
 
 # Create a non-root user for security.
 # Fixed UID/GID 1000:1000 matches the typical first user on Linux systems,
 # making bind-mount ownership straightforward for most users.
-RUN groupadd --gid 1000 debridnzd && \
-    useradd --uid 1000 --gid debridnzd --create-home debridnzd
+RUN groupadd --gid 1000 debridnzbd && \
+    useradd --uid 1000 --gid debridnzbd --create-home debridnzbd
 
 # Copy the virtual environment from the builder stage.
 # This includes the application and all its dependencies, but NOT
 # pip, setuptools, or other build artifacts.
-COPY --from=builder /opt/debridnzd /opt/debridnzd
+COPY --from=builder /opt/debridnzbd /opt/debridnzbd
 
 # Make the venv binaries available on PATH (uvicorn, python, etc.)
-ENV PATH="/opt/debridnzd/bin:${PATH}"
+ENV PATH="/opt/debridnzbd/bin:${PATH}"
 
 # Create the data directory owned by the non-root user.
 # The application creates subdirectories (admin, downloads, logs, scripts)
 # at startup relative to the working directory.
-RUN mkdir -p /data && chown debridnzd:debridnzd /data
+RUN mkdir -p /data && chown debridnzbd:debridnzbd /data
 
 # Set the working directory to /data.
 # The app uses relative paths (admin/, downloads/incomplete/, etc.)
@@ -88,13 +88,13 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/api?mode=version')" || exit 1
 
 # Switch to the non-root user for all subsequent operations.
-USER debridnzd
+USER debridnzbd
 
 # Run uvicorn directly with --host 0.0.0.0 for container networking.
-# Do NOT use the "debridnzd" entry point — it hardcodes host=127.0.0.1
+# Do NOT use the "debridnzbd" entry point — it hardcodes host=127.0.0.1
 # which is unreachable from outside the container.
 # The JSON array form ensures uvicorn runs as PID 1 for proper signal handling
 # (SIGTERM for graceful shutdown).
 # Users can override host/port/workers at docker run time:
-#   docker run debridnzd uvicorn debridnzd.app:create_app --factory --host 0.0.0.0 --port 9090
-CMD ["uvicorn", "debridnzd.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
+#   docker run debridnzbd uvicorn debridnzbd.app:create_app --factory --host 0.0.0.0 --port 9090
+CMD ["uvicorn", "debridnzbd.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]

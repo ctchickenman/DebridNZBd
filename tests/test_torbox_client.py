@@ -20,8 +20,8 @@ import pytest
 import httpx
 import respx
 
-from debridnzd.torbox.client import TorboxClient, DEFAULT_BASE_URL, MAX_RETRIES_LIMIT
-from debridnzd.torbox.exceptions import (
+from debridnzbd.torbox.client import TorboxClient, DEFAULT_BASE_URL, MAX_RETRIES_LIMIT
+from debridnzbd.torbox.exceptions import (
     TorboxAuthError,
     TorboxConnectionError,
     TorboxError,
@@ -29,7 +29,7 @@ from debridnzd.torbox.exceptions import (
     TorboxRateLimitError,
     TorboxServerError,
 )
-from debridnzd.torbox.models import (
+from debridnzbd.torbox.models import (
     TorboxCachedItem,
     TorboxHoster,
     TorboxQueuedDownload,
@@ -1260,7 +1260,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_file_size_validation(self):
         """create_usenet_download should reject files exceeding MAX_FILE_SIZE."""
-        from debridnzd.torbox.client import MAX_FILE_SIZE
+        from debridnzbd.torbox.client import MAX_FILE_SIZE
         client = TorboxClient(api_key=TEST_API_KEY, max_retries=0)
         with pytest.raises(ValueError, match="exceeds maximum"):
             await client.create_usenet_download(
@@ -1280,7 +1280,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_hash_validation_rejects_too_many(self):
         """check_usenet_cached should reject more than MAX_HASH_BATCH hashes."""
-        from debridnzd.torbox.client import MAX_HASH_BATCH
+        from debridnzbd.torbox.client import MAX_HASH_BATCH
         client = TorboxClient(api_key=TEST_API_KEY, max_retries=0)
         with pytest.raises(ValueError, match="Too many hashes"):
             await client.check_usenet_cached(["a1b2c3d4e5f6a7b8"] * (MAX_HASH_BATCH + 1))
@@ -1376,7 +1376,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_rejects_private_ipv4(self):
         """SSRF prevention: URLs pointing to private/reserved IPs must be rejected."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         private_ips = [
             "http://127.0.0.1/endpoint",
@@ -1392,7 +1392,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_rejects_private_ipv6(self):
         """SSRF prevention: URLs pointing to IPv6 loopback/link-local must be rejected."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         with pytest.raises(ValueError, match="private/reserved IP"):
             _validate_url("http://[::1]/endpoint", "link")
@@ -1402,7 +1402,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_allows_domain_names(self):
         """Non-IP hostnames (domain names) should pass validation."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         # Domain names should NOT be rejected (DNS is done by Torbox API, not us)
         result = _validate_url("https://example.com/file.nzb", "link")
@@ -1411,7 +1411,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_allows_public_ip(self):
         """Public IP addresses should pass validation."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         result = _validate_url("https://8.8.8.8/endpoint", "link")
         assert result == "https://8.8.8.8/endpoint"
@@ -1459,7 +1459,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_rejects_decimal_ip(self):
         """SSRF prevention: decimal IP format (2130706433 = 127.0.0.1) must be rejected."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         # 2130706433 = 127.0.0.1 in decimal
         with pytest.raises(ValueError, match="private/reserved IP"):
@@ -1468,7 +1468,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_rejects_hex_ip(self):
         """SSRF prevention: hex IP format (0x7f000001 = 127.0.0.1) must be rejected."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         with pytest.raises(ValueError, match="private/reserved IP"):
             _validate_url("http://0x7f000001/admin", "link")
@@ -1476,7 +1476,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_rejects_octal_ip(self):
         """SSRF prevention: octal IP format (017700000001 = 127.0.0.1) must be rejected."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         # 017700000001 = 127.0.0.1 in octal
         with pytest.raises(ValueError, match="private/reserved IP"):
@@ -1485,7 +1485,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_allows_decimal_public_ip(self):
         """SSRF prevention: decimal IP that resolves to a public IP should pass."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         # 134744072 = 8.8.8.8 in decimal (Google DNS)
         result = _validate_url("http://134744072/endpoint", "link")
@@ -1494,7 +1494,7 @@ class TestSecurityValidations:
     @pytest.mark.asyncio
     async def test_url_validation_rejects_decimal_aws_metadata(self):
         """SSRF prevention: decimal IP for 169.254.169.254 (AWS metadata) must be rejected."""
-        from debridnzd.torbox.client import _validate_url
+        from debridnzbd.torbox.client import _validate_url
 
         # 2851995694 = 169.254.169.254 in decimal
         with pytest.raises(ValueError, match="private/reserved IP"):

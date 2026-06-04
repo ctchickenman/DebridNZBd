@@ -22,16 +22,16 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 from fastapi.responses import JSONResponse
 
-from debridnzd.db.models import QueueResponse, QueueSlot
-from debridnzd.torbox.client import TorboxClient
-from debridnzd.torbox.exceptions import (
+from debridnzbd.db.models import QueueResponse, QueueSlot
+from debridnzbd.torbox.client import TorboxClient
+from debridnzbd.torbox.exceptions import (
     TorboxAuthError,
     TorboxConnectionError,
     TorboxError,
     TorboxRateLimitError,
 )
-from debridnzd.utils.format import format_size, format_speed, format_timeleft
-from debridnzd.utils.nzo_id import generate_nzo_id
+from debridnzbd.utils.format import format_size, format_speed, format_timeleft
+from debridnzbd.utils.nzo_id import generate_nzo_id
 
 logger = logging.getLogger(__name__)
 
@@ -645,7 +645,7 @@ async def handle_queue(params: dict) -> JSONResponse:
     diskspacex2 = "0"
     if config:
         try:
-            from debridnzd.utils.diskspace import get_disk_usage
+            from debridnzbd.utils.diskspace import get_disk_usage
             download_dir = await config.get("folders", "download_dir", "downloads/incomplete")
             complete_dir = await config.get("folders", "complete_dir", "downloads/complete")
             try:

@@ -85,7 +85,7 @@ The `api/router.py` handles all incoming `?mode=XXX` requests:
 
 ## Database Schema
 
-See `debridnzd/migrations/001_initial.py` for the full SQL schema. Key tables:
+See `debridnzbd/migrations/001_initial.py` for the full SQL schema. Key tables:
 
 ### `config` — Key-value configuration store
 
@@ -117,7 +117,7 @@ Archived jobs with final status, local file paths, and timing data.
 
 Support tables for category management, sorting rules, scheduled tasks, and warning messages.
 
-## Torbox Client (`debridnzd/torbox/`)
+## Torbox Client (`debridnzbd/torbox/`)
 
 The Torbox client module provides a fully async HTTP interface to the Torbox debrid API.
 It is organized into three files:
@@ -125,7 +125,7 @@ It is organized into three files:
 ### Module Structure
 
 ```
-debridnzd/torbox/
+debridnzbd/torbox/
 ├── __init__.py      — Public API exports
 ├── client.py        — Async HTTP client (TorboxClient)
 ├── exceptions.py    — Exception hierarchy

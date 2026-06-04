@@ -20,18 +20,18 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from debridnzd.core.state_sync import _extract_download_name, _map_torbox_status
-from debridnzd.core.cdn_downloader import download_file as cdn_download_file, move_to_category_dir as cdn_move_to_category
-from debridnzd.torbox.client import TorboxClient
-from debridnzd.utils.nzo_id import generate_nzo_id
-from debridnzd.torbox.exceptions import (
+from debridnzbd.core.state_sync import _extract_download_name, _map_torbox_status
+from debridnzbd.core.cdn_downloader import download_file as cdn_download_file, move_to_category_dir as cdn_move_to_category
+from debridnzbd.torbox.client import TorboxClient
+from debridnzbd.utils.nzo_id import generate_nzo_id
+from debridnzbd.torbox.exceptions import (
     TorboxAuthError,
     TorboxConnectionError,
     TorboxError,
     TorboxRateLimitError,
 )
-from debridnzd.utils.version import VERSION
-from debridnzd.utils.format import format_size, format_uptime, format_timestamp
+from debridnzbd.utils.version import VERSION
+from debridnzbd.utils.format import format_size, format_uptime, format_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +302,7 @@ async def history_page(request: Request) -> HTMLResponse:
 
 def _format_duration(seconds: float) -> str:
     """Format seconds as 'H:MM:SS'."""
-    from debridnzd.utils.format import format_timeleft
+    from debridnzbd.utils.format import format_timeleft
     return format_timeleft(seconds)
 
 
@@ -1156,7 +1156,7 @@ async def config_torbox_test(request: Request) -> HTMLResponse:
 
     try:
         logger.info("Torbox connection test requested")
-        from debridnzd.torbox.client import TorboxClient
+        from debridnzbd.torbox.client import TorboxClient
         client = TorboxClient(api_key=api_key)
         result = await client.test_connection()
         if result:

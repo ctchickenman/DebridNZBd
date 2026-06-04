@@ -2,14 +2,14 @@
 
 ## Overview
 
-The Torbox client module (`debridnzd/torbox/`) provides a fully async HTTP interface
+The Torbox client module (`debridnzbd/torbox/`) provides a fully async HTTP interface
 to the Torbox debrid service API. It handles authentication, error mapping, automatic
 retries with exponential backoff, and response parsing into typed Pydantic models.
 
 ## Module Structure
 
 ```
-debridnzd/torbox/
+debridnzbd/torbox/
 ├── __init__.py      — Public API exports (all classes and exceptions)
 ├── client.py        — TorboxClient async HTTP client
 ├── exceptions.py   — Exception hierarchy for error handling

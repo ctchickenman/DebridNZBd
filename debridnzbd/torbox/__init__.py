@@ -6,7 +6,7 @@ in the `TorboxClient` class.
 
 Usage::
 
-    from debridnzd.torbox import TorboxClient
+    from debridnzbd.torbox import TorboxClient
 
     async with TorboxClient(api_key="tb_xxxx") as client:
         user = await client.get_user_me()
@@ -22,8 +22,8 @@ Exception hierarchy::
     └── TorboxConnectionError — network/timeout failures
 """
 
-from debridnzd.torbox.client import TorboxClient
-from debridnzd.torbox.exceptions import (
+from debridnzbd.torbox.client import TorboxClient
+from debridnzbd.torbox.exceptions import (
     TorboxAuthError,
     TorboxConnectionError,
     TorboxError,
@@ -31,7 +31,7 @@ from debridnzd.torbox.exceptions import (
     TorboxRateLimitError,
     TorboxServerError,
 )
-from debridnzd.torbox.models import (
+from debridnzbd.torbox.models import (
     TorboxCachedItem,
     TorboxControlOperation,
     TorboxCreateTorrentRequest,

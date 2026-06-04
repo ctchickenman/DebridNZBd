@@ -11,8 +11,8 @@ import time
 
 from fastapi.responses import JSONResponse
 
-from debridnzd.db.models import HistoryResponse, HistorySlot
-from debridnzd.utils.format import format_size
+from debridnzbd.db.models import HistoryResponse, HistorySlot
+from debridnzbd.utils.format import format_size
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +209,7 @@ async def handle_retry(params: dict) -> JSONResponse:
     # If we have the original URL, re-submit it via addurl logic
     if url:
         # Import here to avoid circular imports
-        from debridnzd.api.queue import handle_addurl
+        from debridnzbd.api.queue import handle_addurl
 
         addurl_params = dict(params)
         addurl_params["name"] = url

@@ -71,7 +71,7 @@ _PRIVATE_IP_RANGES = [
 
 import httpx
 
-from debridnzd.torbox.exceptions import (
+from debridnzbd.torbox.exceptions import (
     TorboxAuthError,
     TorboxConnectionError,
     TorboxError,
@@ -79,7 +79,7 @@ from debridnzd.torbox.exceptions import (
     TorboxRateLimitError,
     TorboxServerError,
 )
-from debridnzd.torbox.models import (
+from debridnzbd.torbox.models import (
     TorboxCachedItem,
     TorboxControlOperation,
     TorboxCreateTorrentRequest,

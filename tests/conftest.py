@@ -9,7 +9,7 @@ import pytest
 import pytest_asyncio
 from pathlib import Path
 
-from debridnzd.db.database import Database
+from debridnzbd.db.database import Database
 
 
 @pytest_asyncio.fixture

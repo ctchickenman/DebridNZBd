@@ -15,9 +15,9 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from debridnzd.core.cdn_downloader import download_file, move_to_category_dir
-from debridnzd.torbox.client import TorboxClient
-from debridnzd.torbox.exceptions import (
+from debridnzbd.core.cdn_downloader import download_file, move_to_category_dir
+from debridnzbd.torbox.client import TorboxClient
+from debridnzbd.torbox.exceptions import (
     TorboxAuthError,
     TorboxConnectionError,
     TorboxError,
@@ -564,7 +564,7 @@ async def _reconcile_orphaned_jobs(
     # all Torbox downloads.  For usenet we use the raw link if available;
     # for torrents we use the magnet hash; for web downloads we use the
     # name field as a last resort.
-    from debridnzd.torbox.models import (
+    from debridnzbd.torbox.models import (
         TorboxUsenetDownload,
         TorboxTorrentDownload,
         TorboxWebDownload,
