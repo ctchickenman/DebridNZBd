@@ -1,0 +1,1 @@
+# DebridNZBd core module

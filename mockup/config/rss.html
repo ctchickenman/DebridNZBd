@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — RSS</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html" class="active">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <div class="alert alert-warning" style="margin-top:16px;">
+    ⚠️ RSS feeds are not yet supported in DebridNZBd. This feature is planned for a future release.
+    The configuration UI below is shown for reference.
+  </div>
+
+  <div style="opacity:0.5; pointer-events:none;">
+
+    <div class="card">
+      <div class="card-header">
+        <span>RSS Feeds</span>
+        <button class="btn btn-sm btn-primary" disabled>+ Add Feed</button>
+      </div>
+      <table class="queue-table">
+        <thead>
+          <tr>
+            <th>Enable</th>
+            <th>Feed Name</th>
+            <th>URL</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Processing</th>
+            <th>Filter</th>
+            <th style="width:80px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">
+              No RSS feeds configured. RSS support is coming soon.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

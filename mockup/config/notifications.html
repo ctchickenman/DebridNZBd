@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Notifications</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html" class="active">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <form>
+
+    <!-- Email Notifications -->
+    <div class="card">
+      <div class="card-header">Email Notifications</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox"> Enable Email Notifications</label>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SMTP Server</label>
+            <input type="text" value="" placeholder="e.g., smtp.gmail.com:587">
+          </div>
+          <div class="form-group">
+            <label>Email Recipient</label>
+            <input type="email" value="" placeholder="user@example.com">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Email Sender</label>
+            <input type="text" value="" placeholder="debridnzd@example.com">
+          </div>
+          <div class="form-group">
+            <label>Account Name</label>
+            <input type="text" value="" placeholder="SMTP username">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Account Password</label>
+          <input type="password" value="" placeholder="SMTP password">
+          <div class="hint">Password is stored in plain text in the configuration.</div>
+        </div>
+
+        <h4 style="margin-top:20px; margin-bottom:8px;">Email Event Triggers</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+          <label><input type="checkbox" checked> Errors</label>
+          <label><input type="checkbox"> End of Job</label>
+          <label><input type="checkbox"> Disk Full</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Apprise Notifications -->
+    <div class="card">
+      <div class="card-header">Apprise Notifications</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Apprise URLs</label>
+          <textarea rows="4" placeholder="One URL per line, e.g.:&#10;discord://webhook_id/webhook_token&#10;telegram://bottoken/ChatID&#10;slack://tokenA/tokenB/tokenC"></textarea>
+          <div class="hint">
+            Apprise supports Discord, Telegram, Slack, Pushbullet, Pushover, and many more.
+            <a href="https://github.com/caronc/apprise/wiki" target="_blank" style="color:var(--primary);">View supported services</a>
+          </div>
+        </div>
+
+        <h4 style="margin-top:16px; margin-bottom:8px;">Notification Event Triggers</h4>
+        <table class="queue-table">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Email</th>
+              <th>Apprise</th>
+              <th>Script</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Startup / Shutdown</td><td><input type="checkbox"></td><td><input type="checkbox"></td><td><input type="checkbox"></td></tr>
+            <tr><td>Pause / Resume</td><td><input type="checkbox"></td><td><input type="checkbox"></td><td><input type="checkbox"></td></tr>
+            <tr><td>New NZB Added</td><td><input type="checkbox"></td><td><input type="checkbox"></td><td><input type="checkbox"></td></tr>
+            <tr><td>Post-processing Started</td><td><input type="checkbox"></td><td><input type="checkbox"></td><td><input type="checkbox"></td></tr>
+            <tr><td>Job Finished</td><td><input type="checkbox"></td><td><input type="checkbox" checked></td><td><input type="checkbox"></td></tr>
+            <tr><td>Job Failed</td><td><input type="checkbox" checked></td><td><input type="checkbox" checked></td><td><input type="checkbox"></td></tr>
+            <tr><td>Queue Finished</td><td><input type="checkbox"></td><td><input type="checkbox"></td><td><input type="checkbox"></td></tr>
+            <tr><td>Warning / Error</td><td><input type="checkbox" checked></td><td><input type="checkbox"></td><td><input type="checkbox"></td></tr>
+          </tbody>
+        </table>
+
+        <div class="form-group" style="margin-top:16px;">
+          <label>Limit Notifications to Categories</label>
+          <select>
+            <option selected>All Categories</option>
+            <option>movies</option>
+            <option>tv</option>
+            <option>audio</option>
+            <option>software</option>
+          </select>
+          <div class="hint">Only send notifications for downloads in the selected categories.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Script -->
+    <div class="card">
+      <div class="card-header">Notification Script</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Notification Script</label>
+          <select>
+            <option selected>None</option>
+          </select>
+          <div class="hint">A custom script to run for notification events. Scripts must be placed in the Scripts folder.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

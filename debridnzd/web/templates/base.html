@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="api-key" content="{{ api_key }}">
+  <title>{% block title %}DebridNZBd{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="/" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="/" {% if page == 'home' %}class="active"{% endif %}>Home</a>
+    <a href="/history" {% if page == 'history' %}class="active"{% endif %}>History</a>
+    <a href="/provider" {% if page == 'provider' %}class="active"{% endif %}>Provider</a>
+    <a href="/config" {% if page == 'config' %}class="active"{% endif %}>Config</a>
+    <a href="/status" {% if page == 'status' %}class="active"{% endif %}>Status</a>
+  </nav>
+  <div class="right">
+    {% if speed %}<span class="speed">↓ {{ speed }}</span>{% endif %}
+    {% if queue_paused %}
+    <button class="pause-btn" style="background:var(--success)" onclick="apiAction('resume', {}, function() { window.location.reload(); }, {successMsg: 'Queue resumed'})">▶ Resume</button>
+    {% else %}
+    <button class="pause-btn" onclick="apiAction('pause', {}, function() { window.location.reload(); }, {successMsg: 'Queue paused'})">⏸ Pause</button>
+    {% endif %}
+  </div>
+</nav>
+
+<div class="container">
+{% if flash_message %}
+<div class="alert alert-{{ flash_type }}">{{ flash_message }}</div>
+{% endif %}
+{% block content %}{% endblock %}
+
+  <div class="footer">
+    DebridNZBd v{{ version }} — SABnzbd-compatible API powered by Torbox
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+
+<script src="/static/js/main.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

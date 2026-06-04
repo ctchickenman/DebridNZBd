@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# IDE / Editor
+.vscode/
+.idea/
+.claude/
+
+# Runtime data
+*.db
+*.log
+logs/
+admin/
+downloads/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volume data (local only)

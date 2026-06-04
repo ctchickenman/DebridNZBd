@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Config — Switches{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Configuration</h2>
+{% include "_config_tabs.html" %}
+
+<form method="POST" action="/config/switches">
+
+  <!-- Queue -->
+  <div class="card">
+    <div class="card-header">Queue</div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Maximum Retries</label>
+          <input type="number" name="switches.max_retries" value="{{ switches.get('max_retries', '3') }}" min="0" max="10">
+        </div>
+        <div class="form-group">
+          <label>Propagation Delay</label>
+          <input type="number" name="switches.propagation_delay" value="{{ switches.get('propagation_delay', '0') }}" min="0">
+        </div>
+      </div>
+      <input type="hidden" name="switches.disconnect_on_empty" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.disconnect_on_empty" value="1" {% if switches.get('disconnect_on_empty', '0') == '1' %}checked{% endif %}> Disconnect on empty queue</label>
+        <div class="hint">Not applicable — kept for SABnzbd compatibility.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duplicate Detection -->
+  <div class="card">
+    <div class="card-header">Duplicate Detection</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Identical Download Detection</label>
+        <select name="switches.duplicate_detection">
+          <option value="0" {% if switches.get('duplicate_detection', '0') == '0' %}selected{% endif %}>Off</option>
+          <option value="1" {% if switches.get('duplicate_detection') == '1' %}selected{% endif %}>Basic</option>
+          <option value="2" {% if switches.get('duplicate_detection') == '2' %}selected{% endif %}>Smart</option>
+        </select>
+      </div>
+      <input type="hidden" name="switches.allow_proper" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.allow_proper" value="1" {% if switches.get('allow_proper', '0') == '1' %}checked{% endif %}> Allow proper releases</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unwanted Extensions -->
+  <div class="card">
+    <div class="card-header">Unwanted Extensions</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Extensions</label>
+        <input type="text" name="switches.unwanted_extensions" value="{{ switches.get('unwanted_extensions', 'exe,com,cmd,bat') }}">
+      </div>
+      <div class="form-group">
+        <label>Action</label>
+        <select name="switches.unwanted_extension_mode">
+          <option value="blacklist" {% if switches.get('unwanted_extension_mode', 'blacklist') == 'blacklist' %}selected{% endif %}>Pause</option>
+          <option value="abort" {% if switches.get('unwanted_extension_mode') == 'abort' %}selected{% endif %}>Abort</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Queue Sorting -->
+  <div class="card">
+    <div class="card-header">Queue Sorting</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Auto Sort Queue</label>
+        <select name="switches.auto_sort_queue">
+          <option value="0" {% if switches.get('auto_sort_queue', '0') == '0' %}selected{% endif %}>Default (manual ordering)</option>
+          <option value="1" {% if switches.get('auto_sort_queue') == '1' %}selected{% endif %}>Sort by age (oldest first)</option>
+          <option value="2" {% if switches.get('auto_sort_queue') == '2' %}selected{% endif %}>Sort by name</option>
+          <option value="3" {% if switches.get('auto_sort_queue') == '3' %}selected{% endif %}>Sort by size</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Encryption Handling -->
+  <div class="card">
+    <div class="card-header">Encryption Handling</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Action on encrypted RAR</label>
+        <select name="switches.action_on_encrypted">
+          <option value="0" {% if switches.get('action_on_encrypted', '0') == '0' %}selected{% endif %}>Continue</option>
+          <option value="1" {% if switches.get('action_on_encrypted') == '1' %}selected{% endif %}>Abort</option>
+          <option value="2" {% if switches.get('action_on_encrypted') == '2' %}selected{% endif %}>Pause</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post-Processing -->
+  <div class="card">
+    <div class="card-header">Post-Processing</div>
+    <div class="card-body">
+      <input type="hidden" name="switches.pause_on_pp" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.pause_on_pp" value="1" {% if switches.get('pause_on_pp', '0') == '1' %}checked{% endif %}> Pause downloading during post-processing</label>
+      </div>
+      <input type="hidden" name="switches.download_all_par2" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.download_all_par2" value="1" {% if switches.get('download_all_par2', '0') == '1' %}checked{% endif %}> Download all par2 files</label>
+        <div class="hint">Not typically needed with Torbox.</div>
+      </div>
+      <input type="hidden" name="switches.enable_recursive_unpack" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.enable_recursive_unpack" value="1" {% if switches.get('enable_recursive_unpack', '1') == '1' %}checked{% endif %}> Enable recursive unpacking</label>
+      </div>
+      <input type="hidden" name="switches.ignore_folders_in_archives" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.ignore_folders_in_archives" value="1" {% if switches.get('ignore_folders_in_archives', '0') == '1' %}checked{% endif %}> Ignore folders inside archives</label>
+      </div>
+      <input type="hidden" name="switches.pp_only_verified" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.pp_only_verified" value="1" {% if switches.get('pp_only_verified', '1') == '1' %}checked{% endif %}> Post-process only verified jobs</label>
+      </div>
+      <input type="hidden" name="switches.ignore_samples" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.ignore_samples" value="1" {% if switches.get('ignore_samples', '0') == '1' %}checked{% endif %}> Ignore samples</label>
+      </div>
+      <input type="hidden" name="switches.deobfuscate_filenames" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.deobfuscate_filenames" value="1" {% if switches.get('deobfuscate_filenames', '0') == '1' %}checked{% endif %}> Deobfuscate final filenames</label>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cleanup List</label>
+          <input type="text" name="switches.cleanup_list" value="{{ switches.get('cleanup_list', '.nfo,.nzb,.sfv') }}">
+        </div>
+        <div class="form-group">
+          <label>History Retention</label>
+          <select name="switches.history_retention">
+            <option value="0" {% if switches.get('history_retention', '0') == '0' %}selected{% endif %}>Keep all</option>
+            <option value="1" {% if switches.get('history_retention') == '1' %}selected{% endif %}>1 day</option>
+            <option value="7" {% if switches.get('history_retention') == '7' %}selected{% endif %}>7 days</option>
+            <option value="30" {% if switches.get('history_retention') == '30' %}selected{% endif %}>30 days</option>
+            <option value="50" {% if switches.get('history_retention') == '50' %}selected{% endif %}>50 entries</option>
+            <option value="100" {% if switches.get('history_retention') == '100' %}selected{% endif %}>100 entries</option>
+            <option value="250" {% if switches.get('history_retention') == '250' %}selected{% endif %}>250 entries</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Naming -->
+  <div class="card">
+    <div class="card-header">Naming</div>
+    <div class="card-body">
+      <input type="hidden" name="switches.enable_unrar" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.enable_unrar" value="1" {% if switches.get('enable_unrar', '1') == '1' %}checked{% endif %}> Enable folder rename</label>
+      </div>
+      <input type="hidden" name="switches.replace_spaces" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.replace_spaces" value="1" {% if switches.get('replace_spaces', '0') == '1' %}checked{% endif %}> Replace spaces with underscores</label>
+      </div>
+      <input type="hidden" name="switches.replace_underscores" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.replace_underscores" value="1" {% if switches.get('replace_underscores', '0') == '1' %}checked{% endif %}> Replace underscores with dots</label>
+      </div>
+      <input type="hidden" name="switches.replace_dots" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.replace_dots" value="1" {% if switches.get('replace_dots', '0') == '1' %}checked{% endif %}> Replace dots with spaces</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quota -->
+  <div class="card">
+    <div class="card-header">Quota</div>
+    <div class="card-body">
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Quota Size</label>
+          <input type="text" name="switches.quota_size" value="{{ switches.get('quota_size', '0') }}" placeholder="0 = disabled">
+        </div>
+        <div class="form-group">
+          <label>Quota Period</label>
+          <select name="switches.quota_period">
+            <option value="daily" {% if switches.get('quota_period', 'daily') == 'daily' %}selected{% endif %}>Daily</option>
+            <option value="weekly" {% if switches.get('quota_period') == 'weekly' %}selected{% endif %}>Weekly</option>
+            <option value="monthly" {% if switches.get('quota_period') == 'monthly' %}selected{% endif %}>Monthly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Reset Day</label>
+          <input type="number" name="switches.quota_reset_day" value="{{ switches.get('quota_reset_day', '') }}" placeholder="Day of month">
+        </div>
+      </div>
+      <input type="hidden" name="switches.quota_resume" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="switches.quota_resume" value="1" {% if switches.get('quota_resume', '1') == '1' %}checked{% endif %}> Auto resume after quota reset</label>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <button type="submit" class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+  </div>
+
+</form>
+
+{% endblock %}

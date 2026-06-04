@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Config — Folders{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Configuration</h2>
+{% include "_config_tabs.html" %}
+
+<form method="POST" action="/config/folders">
+
+  <!-- User Folders -->
+  <div class="card">
+    <div class="card-header">User Folders</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Temporary Download Folder</label>
+        <div class="dir-input-group">
+          <input type="text" name="folders.download_dir" id="folders-download_dir" value="{{ folders.get('download_dir', 'downloads/incomplete') }}">
+          <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-download_dir'), {startPath: '{{ folders.get("download_dir", "downloads/incomplete") }}'})" title="Browse directories">&#128193;</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Minimum Free Space for Temp</label>
+          <input type="text" name="folders.min_free_space_download" value="{{ folders.get('min_free_space_download', '250M') }}">
+        </div>
+        <div class="form-group">
+          <label>Minimum Free Space for Complete</label>
+          <input type="text" name="folders.min_free_space_complete" value="{{ folders.get('min_free_space_complete', '100M') }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Completed Download Folder</label>
+        <div class="dir-input-group">
+          <input type="text" name="folders.complete_dir" id="folders-complete_dir" value="{{ folders.get('complete_dir', 'downloads/complete') }}">
+          <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-complete_dir'), {startPath: '{{ folders.get("complete_dir", "downloads/complete") }}'})" title="Browse directories">&#128193;</button>
+        </div>
+      </div>
+      <input type="hidden" name="folders.auto_resume" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="folders.auto_resume" value="1" {% if folders.get('auto_resume', '1') == '1' %}checked{% endif %}> Auto resume paused downloads when free space is available</label>
+      </div>
+      <div class="form-group">
+        <label>Permissions for Completed Downloads</label>
+        <input type="text" name="folders.permissions" value="{{ folders.get('permissions', '') }}" placeholder="e.g., 755 or 777">
+      </div>
+    </div>
+  </div>
+
+  <!-- Watched Folder -->
+  <div class="card">
+    <div class="card-header">Watched Folder</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Watched Folder</label>
+        <div class="dir-input-group">
+          <input type="text" name="folders.dirscan_dir" id="folders-dirscan_dir" value="{{ folders.get('dirscan_dir', '') }}" placeholder="Leave empty to disable">
+          <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-dirscan_dir'), {startPath: '{{ folders.get("dirscan_dir", "") }}'})" title="Browse directories">&#128193;</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Scan Speed</label>
+        <input type="number" name="folders.dirscan_speed" value="{{ folders.get('dirscan_speed', '5') }}" min="0">
+        <div class="hint">Seconds between scans. 0 disables scanning.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <div class="card">
+    <div class="card-header">Scripts</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Scripts Folder</label>
+        <div class="dir-input-group">
+          <input type="text" name="folders.script_dir" id="folders-script_dir" value="{{ folders.get('script_dir', 'scripts') }}">
+          <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-script_dir'), {startPath: '{{ folders.get("script_dir", "scripts") }}'})" title="Browse directories">&#128193;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Advanced Folders -->
+  <div class="card">
+    <div class="card-header">
+      <span>Advanced Folders</span>
+      <span class="advanced-toggle" style="cursor:pointer;">Show Advanced ▾</span>
+    </div>
+    <div class="card-body">
+      <div class="advanced-settings">
+        <div class="form-group">
+          <label>Email Templates Folder</label>
+          <div class="dir-input-group">
+            <input type="text" name="folders.email_dir" id="folders-email_dir" value="{{ folders.get('email_dir', '') }}">
+            <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-email_dir'), {startPath: '{{ folders.get("email_dir", "") }}'})" title="Browse directories">&#128193;</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Password File</label>
+          <input type="text" name="folders.password_file" value="{{ folders.get('password_file', '') }}" placeholder="One password per line, keep under 20 entries">
+        </div>
+        <div class="form-group">
+          <label>Administrative Folder</label>
+          <div class="dir-input-group">
+            <input type="text" name="folders.admin_dir" id="folders-admin_dir" value="{{ folders.get('admin_dir', 'admin') }}">
+            <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-admin_dir'), {startPath: '{{ folders.get("admin_dir", "admin") }}'})" title="Browse directories">&#128193;</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Backup Folder</label>
+          <div class="dir-input-group">
+            <input type="text" name="folders.backup_dir" id="folders-backup_dir" value="{{ folders.get('backup_dir', '') }}">
+            <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-backup_dir'), {startPath: '{{ folders.get("backup_dir", "") }}'})" title="Browse directories">&#128193;</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Log Folder</label>
+          <div class="dir-input-group">
+            <input type="text" name="folders.log_dir" id="folders-log_dir" value="{{ folders.get('log_dir', 'logs') }}">
+            <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-log_dir'), {startPath: '{{ folders.get("log_dir", "logs") }}'})" title="Browse directories">&#128193;</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>NZB Backup Folder</label>
+          <div class="dir-input-group">
+            <input type="text" name="folders.nzb_backup_dir" id="folders-nzb_backup_dir" value="{{ folders.get('nzb_backup_dir', '') }}">
+            <button type="button" class="btn btn-sm btn-secondary btn-browse" onclick="openDirectoryPicker(document.getElementById('folders-nzb_backup_dir'), {startPath: '{{ folders.get("nzb_backup_dir", "") }}'})" title="Browse directories">&#128193;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <button type="submit" class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/directory-picker.js"></script>
+{% endblock %}

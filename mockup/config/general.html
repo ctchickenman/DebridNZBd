@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — General</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html" class="active">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <form>
+
+    <!-- Web Server -->
+    <div class="card">
+      <div class="card-header">Web Server</div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>SABnzbd Host</label>
+            <input type="text" value="127.0.0.1">
+            <div class="hint">Hostname for the web server. 0.0.0.0 for all interfaces.</div>
+          </div>
+          <div class="form-group">
+            <label>SABnzbd Port</label>
+            <input type="number" value="8080">
+            <div class="hint">Port for the web server.</div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Web Interface Theme</label>
+            <select>
+              <option selected>Default</option>
+              <option>Glitter</option>
+              <option>Plush</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Language</label>
+            <select>
+              <option selected>English</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HTTPS -->
+    <div class="card">
+      <div class="card-header">
+        <span>HTTPS</span>
+        <span class="advanced-toggle" onclick="this.parentElement.nextElementSibling.classList.toggle('show')">Show Advanced ▾</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox" checked> Enable HTTPS</label>
+        </div>
+        <div class="advanced-settings">
+          <div class="form-row">
+            <div class="form-group">
+              <label>HTTPS Port</label>
+              <input type="number" value="443">
+            </div>
+            <div class="form-group">
+              <label>HTTPS Certificate</label>
+              <input type="text" value="" placeholder="Path to certificate file">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>HTTPS Key</label>
+              <input type="text" value="" placeholder="Path to key file">
+            </div>
+            <div class="form-group">
+              <label>HTTPS Chain Certificates</label>
+              <input type="text" value="" placeholder="Path to chain certificate">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="card">
+      <div class="card-header">Security</div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" value="" placeholder="Leave empty for no auth">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" value="" placeholder="Leave empty for no auth">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>External Internet Access</label>
+          <select>
+            <option>No access</option>
+            <option>Add NZB files</option>
+            <option selected>API (no config)</option>
+            <option>Full API</option>
+            <option>Full Web Interface</option>
+            <option>Full Web Interface — Only external access requires login</option>
+          </select>
+          <div class="hint">Controls what is accessible from outside the local network.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>API Key</label>
+            <div class="value-display">a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</div>
+            <div style="margin-top:4px;"><button class="btn btn-sm btn-warning">Regenerate API Key</button></div>
+          </div>
+          <div class="form-group">
+            <label>NZB Key</label>
+            <div class="value-display">z9y8x7w6v5u4t3s2r1q0p9o8n7m6l5k4</div>
+            <div style="margin-top:4px;"><button class="btn btn-sm btn-warning">Regenerate NZB Key</button></div>
+            <div class="hint">NZB key allows adding NZBs but not monitoring the queue.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Startup -->
+    <div class="card">
+      <div class="card-header">Startup</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox" checked> Launch browser on startup</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Check for new release</label>
+          <div class="hint">Checks weekly for DebridNZBd updates.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tuning -->
+    <div class="card">
+      <div class="card-header">
+        <span>Tuning</span>
+        <span class="advanced-toggle" onclick="this.parentElement.nextElementSibling.classList.toggle('show')">Show Advanced ▾</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Maximum Line Speed</label>
+          <input type="text" value="0" placeholder="e.g., 10M for 10 MB/s, 0 = unlimited">
+          <div class="hint">Enter your internet connection speed. Used to calculate time estimates.</div>
+        </div>
+        <div class="advanced-settings">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Percentage of Line Speed</label>
+              <input type="number" value="100" min="0" max="100">
+              <div class="hint">0 = no limit. This is the speed limit applied when not using the speed slider.</div>
+            </div>
+            <div class="form-group">
+              <label>Article Cache Limit</label>
+              <input type="text" value="0">
+              <div class="hint">RAM for caching. 0 = disabled, -1 = unlimited.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+<script>
+  // Toggle advanced settings visibility
+  document.querySelectorAll('.advanced-toggle').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Torbox</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html" class="active" style="color:var(--primary);">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <div class="alert alert-info">
+    ℹ️ This section replaces the <strong>Servers</strong> configuration in SABnzbd. Instead of configuring NNTP servers, you configure your Torbox debrid service connection here.
+  </div>
+
+  <form>
+
+    <!-- Connection -->
+    <div class="card">
+      <div class="card-header">
+        <span>Torbox Connection</span>
+        <div class="connection-status connected" style="font-size:12px;">
+          <span class="dot"></span> Connected
+        </div>
+      </div>
+      <div class="card-body">
+
+        <div class="form-group">
+          <label>Torbox API Key <span style="color:var(--danger);">*</span></label>
+          <input type="password" value="tb_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" placeholder="Enter your Torbox API key">
+          <div class="hint">Your Torbox API key from <a href="https://torbox.app/settings" target="_blank" style="color:var(--primary);">torbox.app/settings</a>. Required for all download operations.</div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Torbox API Base URL</label>
+            <input type="text" value="https://api.torbox.app/v1">
+            <div class="hint">Torbox API endpoint. Change only if using a custom endpoint.</div>
+          </div>
+          <div class="form-group">
+            <label>Default Download Type</label>
+            <select>
+              <option value="auto" selected>Auto-detect (recommended)</option>
+              <option value="usenet">Usenet (NZB links)</option>
+              <option value="torrent">Torrent (magnet links)</option>
+              <option value="webdl">Web Download (direct links)</option>
+            </select>
+            <div class="hint">How to handle URLs when type can't be auto-detected. For *arr clients, use Auto-detect or Usenet.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <button class="btn btn-success" type="button">Test Connection</button>
+          <span style="margin-left:12px; color:var(--success);">✓ Connection successful — Pro plan, expires 2025-06-15</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account Info (read-only) -->
+    <div class="card">
+      <div class="card-header">Account Information</div>
+      <div class="card-body">
+        <div class="status-grid">
+          <div>
+            <div class="stat-item">
+              <span class="label">Plan</span>
+              <span class="value" style="color:var(--success);">Pro</span>
+            </div>
+            <div class="stat-item">
+              <span class="label">Premium Expires</span>
+              <span class="value">2025-06-15</span>
+            </div>
+            <div class="stat-item">
+              <span class="label">Total Downloaded</span>
+              <span class="value">342.7 GB</span>
+            </div>
+          </div>
+          <div>
+            <div class="stat-item">
+              <span class="label">Active Downloads</span>
+              <span class="value">3</span>
+            </div>
+            <div class="stat-item">
+              <span class="label">Cached Available</span>
+              <span class="value" style="color:var(--success);">Yes</span>
+            </div>
+            <div class="stat-item">
+              <span class="label">Email</span>
+              <span class="value">user@example.com</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Download Behavior -->
+    <div class="card">
+      <div class="card-header">Download Behavior</div>
+      <div class="card-body">
+
+        <div class="form-group">
+          <label>Default Post-Processing</label>
+          <select>
+            <option value="-1" selected>Default (use category setting)</option>
+            <option value="0">None</option>
+            <option value="1">+Repair</option>
+            <option value="2">+Repair +Unpack</option>
+            <option value="3">+Repair +Unpack +Delete</option>
+          </select>
+          <div class="hint">Post-processing level sent to Torbox. This is equivalent to SABnzbd's server-level PP setting.</div>
+        </div>
+
+        <div class="form-group">
+          <label><input type="checkbox" checked> Auto-download on completion</label>
+          <div class="hint">When a Torbox download completes, automatically fetch the CDN file to local disk. Disable this if you only want to cache content on Torbox without downloading locally.</div>
+        </div>
+
+        <div class="form-group">
+          <label><input type="checkbox" checked> Check if content is cached before submitting</label>
+          <div class="hint">Before creating a new download, check if the content is already cached on Torbox. Cached content is available for immediate download.</div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>CDN Download Concurrency</label>
+            <input type="number" value="2" min="1" max="5">
+            <div class="hint">Number of simultaneous CDN file downloads (1-5).</div>
+          </div>
+          <div class="form-group">
+            <label>Poll Interval (seconds)</label>
+            <input type="number" value="5" min="1" max="60">
+            <div class="hint">How often to poll Torbox for download status updates. Lower values provide faster updates but use more API calls.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Supported Hosters -->
+    <div class="card">
+      <div class="card-header">
+        <span>Supported Web Download Hosters</span>
+        <button class="btn btn-sm btn-outline">Refresh List</button>
+      </div>
+      <div class="card-body">
+        <p style="color:var(--text-muted); margin-bottom:12px;">These hosters are supported by Torbox for Web Download mode:</p>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <span class="badge badge-downloading" style="font-size:11px;">rapidgator.net</span>
+          <span class="badge badge-downloading" style="font-size:11px;">nitroflare.com</span>
+          <span class="badge badge-downloading" style="font-size:11px;">1fichier.com</span>
+          <span class="badge badge-downloading" style="font-size:11px;">uploaded.net</span>
+          <span class="badge badge-downloading" style="font-size:11px;">mega.nz</span>
+          <span class="badge badge-downloading" style="font-size:11px;">mediafire.com</span>
+          <span class="badge badge-downloading" style="font-size:11px;">dropbox.com</span>
+          <span class="badge badge-downloading" style="font-size:11px;">drive.google.com</span>
+          <span class="badge badge-paused" style="font-size:11px;">filefactory.com (inactive)</span>
+          <span style="color:var(--text-muted); font-size:12px;">+ 47 more hosters</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

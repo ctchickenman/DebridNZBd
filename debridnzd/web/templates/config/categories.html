@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Config — Categories{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Configuration</h2>
+{% include "_config_tabs.html" %}
+
+<div class="alert alert-info">
+  ℹ️ Categories determine how downloads are processed and where they're stored. Each category row has its own save button.
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span>Categories</span>
+    <button class="btn btn-sm btn-primary" onclick="document.getElementById('add-form').style.display='block'">+ Add Category</button>
+  </div>
+  <div class="card-body">
+    {% if categories %}
+    <table class="queue-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Priority</th>
+          <th>Processing</th>
+          <th>Script</th>
+          <th>Folder/Path</th>
+          <th>Indexer Tags</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for cat in categories %}
+        <tr>
+          <form method="POST" action="/config/categories/save">
+            <input type="hidden" name="name" value="{{ cat.name }}">
+            <td><strong>{{ cat.name if cat.name != '*' else 'Default' }}</strong></td>
+            <td>
+              <select name="priority" style="width:100px;">
+                <option value="-100" {% if cat.priority == -100 %}selected{% endif %}>Paused</option>
+                <option value="0" {% if cat.priority == 0 %}selected{% endif %}>Normal</option>
+                <option value="1" {% if cat.priority == 1 %}selected{% endif %}>High</option>
+                <option value="2" {% if cat.priority == 2 %}selected{% endif %}>Force</option>
+              </select>
+            </td>
+            <td>
+              <select name="pp" style="width:120px;">
+                <option value="-1" {% if cat.pp == -1 %}selected{% endif %}>Default</option>
+                <option value="0" {% if cat.pp == 0 %}selected{% endif %}>None</option>
+                <option value="1" {% if cat.pp == 1 %}selected{% endif %}>+Repair</option>
+                <option value="2" {% if cat.pp == 2 %}selected{% endif %}>+Repair +Unpack</option>
+                <option value="3" {% if cat.pp == 3 %}selected{% endif %}>+Repair +Unpack +Delete</option>
+              </select>
+            </td>
+            <td><input type="text" name="script" value="{{ cat.script }}" style="width:80px;"></td>
+            <td>
+              <div class="dir-input-group">
+                <input type="text" name="dir" value="{{ cat.dir }}" id="dir-{{ cat.name }}"
+                       title="{{ dir_full_paths.get(cat.name, cat.dir) }}"
+                       style="width:120px;">
+                <button type="button" class="btn btn-sm btn-secondary btn-browse"
+                        onclick="openDirectoryPicker(document.getElementById('dir-{{ cat.name }}'), {basePath: '{{ complete_dir }}', startPath: '{{ dir_full_paths.get(cat.name, '') }}'})"
+                        title="Browse directories">&#128193;</button>
+              </div>
+            </td>
+            <td><input type="text" name="newzbin" value="{{ cat.newzbin }}" style="width:100px;"></td>
+            <td class="actions">
+              <button type="submit" class="btn btn-sm btn-primary" title="Save">💾</button>
+              {% if cat.name != '*' %}
+              <button type="submit" formaction="/config/categories/delete" formmethod="POST" class="btn btn-sm btn-danger" title="Delete">✕</button>
+              {% endif %}
+            </td>
+          </form>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="color:var(--text-muted); text-align:center; padding:16px;">No categories configured.</div>
+    {% endif %}
+
+    <!-- Add Category Form -->
+    <div id="add-form" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-color);">
+      <form method="POST" action="/config/categories/add" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+        <div class="form-group" style="margin-bottom:0; flex:1; min-width:150px;">
+          <label>Category Name</label>
+          <input type="text" name="name" placeholder="e.g., movies" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Category</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/directory-picker.js"></script>
+{% endblock %}

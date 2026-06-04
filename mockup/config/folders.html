@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Folders</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html" class="active">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <form>
+
+    <!-- User Folders -->
+    <div class="card">
+      <div class="card-header">User Folders</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Temporary Download Folder</label>
+          <input type="text" value="downloads/incomplete">
+          <div class="hint">Where downloads are stored during transfer. Completed files are verified then moved to the Complete Folder.</div>
+        </div>
+        <div class="form-group">
+          <label>Minimum Free Space for Temporary Download Folder</label>
+          <input type="text" value="250M">
+          <div class="hint">Auto-pause when free space drops below this value. Suffixes: K, M, G.</div>
+        </div>
+        <div class="form-group">
+          <label>Completed Download Folder</label>
+          <input type="text" value="downloads/complete">
+          <div class="hint">Default download location for all items unless overridden by category settings.</div>
+        </div>
+        <div class="form-group">
+          <label>Minimum Free Space for Completed Download Folder</label>
+          <input type="text" value="100M">
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" checked> Auto resume</label>
+          <div class="hint">Automatically resume downloading when minimum free space is available again.</div>
+        </div>
+        <div class="form-group">
+          <label>Permissions for Completed Downloads</label>
+          <input type="text" value="" placeholder="e.g., 755 or 777 (Linux/macOS only)">
+          <div class="hint">Octal file/folder permissions for completed downloads.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Watched Folder -->
+    <div class="card">
+      <div class="card-header">Watched Folder</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Watched Folder</label>
+          <input type="text" value="" placeholder="Leave empty to disable">
+          <div class="hint">Periodically scanned for new NZB files. Supports .nzb, .gz, .bz2, .zip, .rar, .7z.</div>
+        </div>
+        <div class="form-group">
+          <label>Watched Folder Scan Speed</label>
+          <input type="number" value="5" min="0">
+          <div class="hint">Seconds between scans. 0 disables automatic scanning.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts Folder -->
+    <div class="card">
+      <div class="card-header">Scripts</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Scripts Folder</label>
+          <input type="text" value="scripts">
+          <div class="hint">Location for post-processing and pre-queue scripts.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Folders -->
+    <div class="card">
+      <div class="card-header">
+        <span>Advanced Folders</span>
+        <span class="advanced-toggle" onclick="this.parentElement.nextElementSibling.classList.toggle('show')">Show Advanced ▾</span>
+      </div>
+      <div class="card-body">
+        <div class="advanced-settings">
+          <div class="form-group">
+            <label>Email Templates Folder</label>
+            <input type="text" value="" placeholder="Custom email templates">
+          </div>
+          <div class="form-group">
+            <label>Password File</label>
+            <input type="text" value="" placeholder="One password per line">
+            <div class="hint">A text file listing known passwords for password-protected archives. Keep under 20 entries.</div>
+          </div>
+          <div class="form-group">
+            <label>Administrative Folder</label>
+            <input type="text" value="admin">
+            <div class="hint">Location for queue, admin, and history database.</div>
+          </div>
+          <div class="form-group">
+            <label>Backup Folder</label>
+            <input type="text" value="" placeholder="Defaults to Complete Download Folder">
+          </div>
+          <div class="form-group">
+            <label>Log Folder</label>
+            <input type="text" value="logs">
+          </div>
+          <div class="form-group">
+            <label>NZB Backup Folder</label>
+            <input type="text" value="" placeholder="Leave empty to disable NZB backup">
+            <div class="hint">Stores a local copy of each NZB file added to the queue.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

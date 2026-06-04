@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Switches</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html" class="active">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <form>
+
+    <!-- Queue -->
+    <div class="card">
+      <div class="card-header">Queue</div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Maximum Retries</label>
+            <input type="number" value="3" min="0">
+            <div class="hint">Limits retries per download. Prevents infinite retry loops.</div>
+          </div>
+          <div class="form-group">
+            <label>Propagation Delay</label>
+            <input type="number" value="0" min="0">
+            <div class="hint">Minutes to delay very young posts. Not typically needed with Torbox.</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Disconnect on empty queue</label>
+          <div class="hint">Disconnect from Torbox when queue is empty or paused. Not applicable — kept for compatibility.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Only get articles for top of queue</label>
+          <div class="hint">Prevents a stalled top job from blocking the queue.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Check before download</label>
+          <div class="hint">Checks content availability before downloading.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" checked> Abort jobs that cannot be completed</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Duplicate Detection -->
+    <div class="card">
+      <div class="card-header">Duplicate Detection</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Identical Download Detection</label>
+          <select>
+            <option value="0" selected>Off</option>
+            <option value="1">Basic</option>
+            <option value="2">Smart</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Allow proper releases</label>
+          <div class="hint">Allow PROPER releases to override previously downloaded versions.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unwanted Extensions -->
+    <div class="card">
+      <div class="card-header">Unwanted Extensions</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Unwanted Extensions</label>
+          <input type="text" value="exe, com, cmd, bat" placeholder="Comma-separated extensions">
+        </div>
+        <div class="form-group">
+          <label>Action when unwanted extension detected</label>
+          <select>
+            <option value="0">Off (skip detection)</option>
+            <option value="1" selected>Pause</option>
+            <option value="2">Abort</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue Sorting -->
+    <div class="card">
+      <div class="card-header">Queue Sorting</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Automatically Sort Queue</label>
+          <select>
+            <option value="0" selected>Default (manual ordering)</option>
+            <option value="1">Sort by % downloaded</option>
+            <option value="2">Sort by age</option>
+            <option value="3">Sort by name</option>
+            <option value="4">Sort by size</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Encryption -->
+    <div class="card">
+      <div class="card-header">Encryption Handling</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Action when encrypted RAR is downloaded</label>
+          <select>
+            <option value="0">Continue</option>
+            <option value="1" selected>Abort</option>
+            <option value="2">Pause</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post-Processing -->
+    <div class="card">
+      <div class="card-header">Post-Processing</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox"> Pause downloading during post-processing</label>
+          <div class="hint">Pauses the queue while verifying/repairing. Useful on resource-constrained systems.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Download all par2 files</label>
+          <div class="hint">Downloads all par2 files when a job is damaged. Not typically needed with Torbox.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" checked> Enable recursive unpacking</label>
+          <div class="hint">Unpacks archives within archives.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Ignore any folders inside archives</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" checked> Post-process only verified jobs</label>
+          <div class="hint">Only unpacks jobs that passed verification.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Ignore samples</label>
+          <div class="hint">Deletes files containing "sample" or "proof" after post-processing.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Deobfuscate final filenames</label>
+          <div class="hint">Renames obfuscated filenames to the job name.</div>
+        </div>
+        <div class="form-group">
+          <label>Cleanup List</label>
+          <input type="text" value=".nfo, .sfv" placeholder="Comma-separated extensions to delete">
+          <div class="hint">File extensions to delete during cleanup.</div>
+        </div>
+        <div class="form-group">
+          <label>History Retention</label>
+          <select>
+            <option value="0" selected>Keep all</option>
+            <option value="1">1 day</option>
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="50">Last 50 entries</option>
+            <option value="100">Last 100 entries</option>
+            <option value="250">Last 250 entries</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Naming -->
+    <div class="card">
+      <div class="card-header">Naming</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox" checked> Enable folder rename</label>
+          <div class="hint">Uses _UNPACK_ prefix during unpacking.</div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Replace spaces in folder name with underscores</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Replace underscores in folder name with dots</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Replace dots in folder name with spaces</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox"> Make Windows compatible</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quota -->
+    <div class="card">
+      <div class="card-header">Quota</div>
+      <div class="card-body">
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Quota Size</label>
+            <input type="text" value="0" placeholder="e.g., 5G, 1T, 0 = disabled">
+          </div>
+          <div class="form-group">
+            <label>Quota Period</label>
+            <select>
+              <option value="daily" selected>Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Reset Day</label>
+            <input type="text" value="" placeholder="e.g., 20 or 20 23:30">
+          </div>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" checked> Auto resume after quota reset</label>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

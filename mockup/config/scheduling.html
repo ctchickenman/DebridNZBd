@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Scheduling</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html" class="active">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <form>
+
+    <!-- Schedule Table -->
+    <div class="card">
+      <div class="card-header">
+        <span>Scheduled Tasks</span>
+        <button class="btn btn-sm btn-primary">+ Add Schedule</button>
+      </div>
+      <table class="queue-table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Time</th>
+            <th>Action</th>
+            <th>Argument</th>
+            <th style="width:80px;">Delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Daily</option>
+                <option>Mon</option>
+                <option>Tue</option>
+                <option>Wed</option>
+                <option>Thu</option>
+                <option>Fri</option>
+                <option>Sat</option>
+                <option>Sun</option>
+              </select>
+            </td>
+            <td><input type="time" value="06:00" style="width:120px;"></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Resume</option>
+                <option>Pause</option>
+                <option>Pause All</option>
+                <option>Speedlimit</option>
+                <option>Shutdown</option>
+                <option>Restart</option>
+                <option>Pause PP</option>
+                <option>Resume PP</option>
+                <option>Scan Watched</option>
+                <option>Create Backup</option>
+                <option>Remove Failed</option>
+                <option>Remove Completed</option>
+              </select>
+            </td>
+            <td><input type="text" value="" placeholder="—" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-danger">✕</button></td>
+          </tr>
+          <tr>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Daily</option>
+                <option>Mon</option>
+                <option>Tue</option>
+                <option>Wed</option>
+                <option>Thu</option>
+                <option>Fri</option>
+                <option selected>Sat</option>
+                <option>Sun</option>
+              </select>
+            </td>
+            <td><input type="time" value="23:00" style="width:120px;"></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Resume</option>
+                <option selected>Pause</option>
+                <option>Pause All</option>
+                <option>Speedlimit</option>
+                <option>Shutdown</option>
+                <option>Restart</option>
+                <option>Pause PP</option>
+                <option>Resume PP</option>
+                <option>Scan Watched</option>
+                <option>Create Backup</option>
+                <option>Remove Failed</option>
+                <option>Remove Completed</option>
+              </select>
+            </td>
+            <td><input type="text" value="" placeholder="—" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-danger">✕</button></td>
+          </tr>
+          <tr>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Daily</option>
+                <option>Mon</option>
+                <option>Tue</option>
+                <option>Wed</option>
+                <option>Thu</option>
+                <option selected>Fri</option>
+                <option>Sat</option>
+                <option>Sun</option>
+              </select>
+            </td>
+            <td><input type="time" value="03:00" style="width:120px;"></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Resume</option>
+                <option>Pause</option>
+                <option>Pause All</option>
+                <option>Speedlimit</option>
+                <option>Shutdown</option>
+                <option>Restart</option>
+                <option>Pause PP</option>
+                <option>Resume PP</option>
+                <option>Scan Watched</option>
+                <option>Create Backup</option>
+                <option selected>Remove Failed</option>
+                <option>Remove Completed</option>
+              </select>
+            </td>
+            <td><input type="text" value="" placeholder="—" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-danger">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Special Settings</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html" class="active">Special</a>
+  </div>
+
+  <form>
+
+    <div class="card">
+      <div class="card-header">Special Settings</div>
+      <div class="card-body">
+
+        <table class="queue-table">
+          <thead>
+            <tr>
+              <th style="width:40%;">Setting</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Start downloads paused</td>
+              <td><input type="checkbox"></td>
+            </tr>
+            <tr>
+              <td>Preserve paused state on restart</td>
+              <td><input type="checkbox"></td>
+            </tr>
+            <tr>
+              <td>Overwrite existing files</td>
+              <td><input type="checkbox"></td>
+            </tr>
+            <tr>
+              <td>Enable API warnings</td>
+              <td><input type="checkbox" checked></td>
+            </tr>
+            <tr>
+              <td>Helpful warnings</td>
+              <td><input type="checkbox" checked></td>
+            </tr>
+            <tr>
+              <td>Disable API key (dangerous)</td>
+              <td><input type="checkbox"></td>
+            </tr>
+            <tr>
+              <td>API logging</td>
+              <td><input type="checkbox" checked></td>
+            </tr>
+            <tr>
+              <td>Enable X-Frame-Options header</td>
+              <td><input type="checkbox" checked></td>
+            </tr>
+            <tr>
+              <td>URL Base</td>
+              <td><input type="text" value="/" style="width:200px;"></td>
+            </tr>
+            <tr>
+              <td>Size limit for accepting NZBs</td>
+              <td><input type="text" value="0" style="width:200px;"> <span style="color:var(--text-muted);">0 = no limit</span></td>
+            </tr>
+            <tr>
+              <td>Nomedia marker file</td>
+              <td><input type="text" value=".nomedia" style="width:200px;"></td>
+            </tr>
+            <tr>
+              <td>Maximum folder name length</td>
+              <td><input type="number" value="246" style="width:200px;"></td>
+            </tr>
+            <tr>
+              <td>Allow old SSL/TLS versions</td>
+              <td><input type="checkbox"></td>
+            </tr>
+            <tr>
+              <td>Config lock</td>
+              <td><input type="checkbox"></td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
+    </div>
+
+    <!-- Backup/Restore -->
+    <div class="card">
+      <div class="card-header">Backup &amp; Restore</div>
+      <div class="card-body">
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <button class="btn btn-secondary">Create Backup</button>
+          <button class="btn btn-warning">Restore Backup</button>
+        </div>
+        <div class="hint" style="margin-top:8px;">Backup contains all configuration, queue data, and history. Sensitive data like API keys and passwords are included.</div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

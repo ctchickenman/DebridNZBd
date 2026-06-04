@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Provider{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Provider</h2>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% elif not torbox_connected %}
+<div class="alert alert-warning">
+  ⚠️ Torbox is not connected. Configure your API key in <a href="/config/torbox">Config → Torbox</a>.
+</div>
+{% endif %}
+
+<div id="provider-refresh">
+
+<!-- Stats Bar -->
+<div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
+  <div class="card" style="flex:1; min-width:120px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:var(--primary);">{{ provider_stats.total }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Total</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:120px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#9b59b6;">{{ provider_stats.usenet_count }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Usenet</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:120px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:var(--primary);">{{ provider_stats.torrent_count }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Torrents</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:120px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:#8e8ea0;">{{ provider_stats.webdl_count }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">WebDL</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:120px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:var(--warning);">{{ provider_stats.queued_count }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Queued</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:120px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700;">{{ provider_stats.total_size }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Total Size</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
+    <div class="form-group" style="margin-bottom:0; flex:1; min-width:200px;">
+      <label>Search</label>
+      <input type="text" id="provider-search" placeholder="Filter by name..." oninput="providerFilter()">
+    </div>
+    <div class="form-group" style="margin-bottom:0; width:140px;">
+      <label>Type</label>
+      <select id="provider-type-filter" onchange="providerFilter()">
+        <option value="">All</option>
+        <option value="usenet">Usenet</option>
+        <option value="torrent">Torrent</option>
+        <option value="webdl">WebDL</option>
+        <option value="queued">Queued</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0; width:140px;">
+      <label>Status</label>
+      <select id="provider-status-filter" onchange="providerFilter()">
+        <option value="">All</option>
+        <option value="downloading">Downloading</option>
+        <option value="queued">Queued</option>
+        <option value="complete">Complete</option>
+        <option value="paused">Paused</option>
+        <option value="failed">Failed</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:6px; padding-bottom:4px; flex-wrap:wrap; align-items:center;">
+      <div id="provider-bulk-category" style="display:none; align-items:center; gap:4px;">
+        <select id="provider-bulk-category-select" class="provider-category">
+          {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="providerSetCategory()" title="Set category for all selected items">Set Category</button>
+      </div>
+      <button class="btn btn-sm btn-success" id="provider-download-selected-btn" onclick="providerDownloadSelected()" style="display:none;">⬇ Download Selected</button>
+      <button class="btn btn-sm btn-danger" id="provider-delete-selected-btn" onclick="providerDeleteSelected()" style="display:none;">✕ Delete Selected</button>
+      <button class="btn btn-sm btn-secondary" onclick="window.location.reload()">↻ Refresh</button>
+    </div>
+  </div>
+</div>
+
+<!-- Provider Table -->
+<div class="card">
+  {% if provider_items %}
+  <table class="queue-table" id="provider-table">
+    <thead>
+      <tr>
+        <th style="width:30px;"><input type="checkbox" id="provider-select-all" onchange="providerToggleAll(this)"></th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Progress</th>
+        <th>Size</th>
+        <th>Category</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in provider_items %}
+      <tr data-provider-id="{{ item.type }}:{{ item.id }}" data-type="{{ item.type }}" data-status="{{ item.status_label }}" data-local="{{ 'true' if item.local_status else 'false' }}">
+        <td>
+          <input type="checkbox" class="provider-checkbox" value="{{ item.type }}:{{ item.id }}">
+        </td>
+        <td><strong>{{ item.name }}</strong></td>
+        <td><span class="badge badge-{{ item.type }}">{{ item.type }}</span></td>
+        <td>
+          {% if item.local_status %}
+          <span class="badge badge-{{ 'complete' if item.local_status == 'Complete' else 'downloading' }}">{{ item.local_status }}</span>
+          {% else %}
+          <span class="badge badge-{{ item.status_label }}">{{ item.status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="provider-progress">
+            <div class="progress-bar"><div class="fill{% if item.progress_pct == '100' %} complete{% endif %}" style="width:{{ item.progress_pct }}%"></div></div>
+            <span class="pct">{{ item.progress_pct }}%</span>
+          </div>
+        </td>
+        <td>{{ item.size }}</td>
+        <td>
+          <select class="provider-category" data-id="{{ item.type }}:{{ item.id }}">
+            {% for cat in categories %}
+            <option value="{{ cat }}" {% if cat == (item.local_category or '*') %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td style="font-size:12px; color:var(--text-muted);">{{ item.created_at }}</td>
+        <td class="actions">
+          {% if not item.local_status %}
+          <button class="btn btn-sm btn-success" title="Download to local queue" onclick="providerDownloadSingle('{{ item.type }}:{{ item.id }}', this)">⬇</button>
+          {% elif item.local_status == 'Complete' %}
+          <button class="btn btn-sm btn-outline" title="Re-download" onclick="providerDownloadSingle('{{ item.type }}:{{ item.id }}', this)">↻</button>
+          {% else %}
+          <span class="badge badge-downloading" title="Already in queue">⟳</span>
+          {% endif %}
+          <button class="btn btn-sm btn-danger" title="Delete from Torbox" onclick="providerDeleteSingle('{{ item.type }}:{{ item.id }}', this)">✕</button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  {% if torbox_connected %}
+  <div class="card-body" style="text-align:center; color:var(--text-muted); padding:40px;">
+    No downloads found on your Torbox account.
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+</div><!-- end #provider-refresh -->
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  // --- Provider delete (single item) ---
+  window.providerDeleteSingle = function(itemId, btnEl) {
+    if (!confirm('Delete this download from Torbox? This cannot be undone.')) return;
+
+    fetch('/provider/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({items: [itemId]})
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === true) {
+        showToast((data.deleted_count || 0) + ' item(s) deleted', 'success');
+        // Remove the row from the table
+        var row = btnEl.closest('tr');
+        if (row) removeRow(row);
+        // Update select-all checkbox and action buttons
+        updateActionButtons();
+      } else {
+        showToast(data.error || 'Delete failed', 'danger');
+      }
+    })
+    .catch(function(err) {
+      showToast('Network error: ' + err.message, 'danger');
+    });
+  };
+
+  // --- Provider download (single item) ---
+  window.providerDownloadSingle = function(itemId, btnEl) {
+    // Get the category for this item
+    var row = btnEl.closest('tr');
+    var catSelect = row ? row.querySelector('.provider-category') : null;
+    var category = catSelect ? catSelect.value : '*';
+
+    var origText = btnEl.textContent;
+    btnEl.disabled = true;
+    btnEl.textContent = '...';
+
+    fetch('/provider/download', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({items: [{id: itemId, category: category}]})
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === true) {
+        var msg = '';
+        if (data.downloaded_count > 0) msg += data.downloaded_count + ' downloaded';
+        if (data.skipped_count > 0) msg += (msg ? ', ' : '') + data.skipped_count + ' already tracked';
+        if (!msg) msg = 'No action taken';
+        showToast(msg, 'success');
+        // Reload to show updated status
+        setTimeout(function() { window.location.reload(); }, 1000);
+      } else {
+        showToast(data.error || 'Download failed', 'danger');
+        btnEl.disabled = false;
+        btnEl.textContent = origText;
+      }
+    })
+    .catch(function(err) {
+      showToast('Network error: ' + err.message, 'danger');
+      btnEl.disabled = false;
+      btnEl.textContent = origText;
+    });
+  };
+
+  // --- Provider download (bulk selected) ---
+  window.providerDownloadSelected = function() {
+    var checkboxes = document.querySelectorAll('.provider-checkbox:checked');
+    if (checkboxes.length === 0) return;
+
+    var items = [];
+    checkboxes.forEach(function(cb) {
+      var row = cb.closest('tr');
+      var catSelect = row ? row.querySelector('.provider-category') : null;
+      items.push({
+        id: cb.value,
+        category: catSelect ? catSelect.value : '*'
+      });
+    });
+
+    if (!confirm('Download ' + items.length + ' selected item(s)?')) return;
+
+    fetch('/provider/download', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({items: items})
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === true) {
+        var msg = '';
+        if (data.downloaded_count > 0) msg += data.downloaded_count + ' downloaded';
+        if (data.skipped_count > 0) msg += (msg ? ', ' : '') + data.skipped_count + ' already tracked';
+        if (!msg) msg = 'No action taken';
+        showToast(msg, 'success');
+        setTimeout(function() { window.location.reload(); }, 1000);
+      } else {
+        showToast(data.error || 'Download failed', 'danger');
+      }
+    })
+    .catch(function(err) {
+      showToast('Network error: ' + err.message, 'danger');
+    });
+  };
+
+  // --- Set category (bulk) ---
+  window.providerSetCategory = function() {
+    var checkboxes = document.querySelectorAll('.provider-checkbox:checked');
+    if (checkboxes.length === 0) return;
+
+    var category = document.getElementById('provider-bulk-category-select').value;
+    var items = [];
+    checkboxes.forEach(function(cb) { items.push(cb.value); });
+
+    // First, update all selected rows' dropdowns visually
+    checkboxes.forEach(function(cb) {
+      var row = cb.closest('tr');
+      if (row) {
+        var catSelect = row.querySelector('.provider-category');
+        if (catSelect) catSelect.value = category;
+      }
+    });
+
+    // Then update tracked items in the DB
+    fetch('/provider/set_category', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({items: items, category: category})
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === true) {
+        var count = checkboxes.length;
+        showToast('Category set to "' + category + '" for ' + count + ' item(s)' +
+          (data.updated_count > 0 ? ' (' + data.updated_count + ' updated in DB)' : ''), 'success');
+      } else {
+        showToast(data.error || 'Failed to set category', 'danger');
+      }
+    })
+    .catch(function(err) {
+      showToast('Network error: ' + err.message, 'danger');
+    });
+  };
+
+  // --- Provider delete (bulk selected) ---
+  window.providerDeleteSelected = function() {
+    var checkboxes = document.querySelectorAll('.provider-checkbox:checked');
+    if (checkboxes.length === 0) return;
+    if (!confirm('Delete ' + checkboxes.length + ' selected download(s) from Torbox? This cannot be undone.')) return;
+
+    var items = [];
+    checkboxes.forEach(function(cb) { items.push(cb.value); });
+
+    fetch('/provider/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({items: items})
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === true) {
+        showToast((data.deleted_count || 0) + ' item(s) deleted', 'success');
+        // Remove deleted rows
+        items.forEach(function(id) {
+          var row = document.querySelector('tr[data-provider-id="' + id + '"]');
+          if (row) {
+            row.style.transition = 'opacity 0.3s';
+            row.style.opacity = '0';
+            setTimeout(function() { if (row.parentNode) row.parentNode.removeChild(row); }, 300);
+          }
+        });
+        updateActionButtons();
+        // Reload if table is empty
+        setTimeout(function() {
+          var tbody = document.querySelector('#provider-table tbody');
+          if (tbody && tbody.children.length === 0) window.location.reload();
+        }, 400);
+      } else {
+        showToast(data.error || 'Delete failed', 'danger');
+      }
+    })
+    .catch(function(err) {
+      showToast('Network error: ' + err.message, 'danger');
+    });
+  };
+
+  // --- Toggle all checkboxes ---
+  window.providerToggleAll = function(masterCb) {
+    document.querySelectorAll('.provider-checkbox').forEach(function(cb) {
+      cb.checked = masterCb.checked;
+    });
+    updateActionButtons();
+  };
+
+  // --- Show/hide action buttons based on selection ---
+  function updateActionButtons() {
+    var checked = document.querySelectorAll('.provider-checkbox:checked').length;
+    var deleteBtn = document.getElementById('provider-delete-selected-btn');
+    var downloadBtn = document.getElementById('provider-download-selected-btn');
+    var categoryDiv = document.getElementById('provider-bulk-category');
+    if (deleteBtn) {
+      deleteBtn.style.display = checked > 0 ? 'inline-block' : 'none';
+      deleteBtn.textContent = '✕ Delete Selected (' + checked + ')';
+    }
+    if (downloadBtn) {
+      downloadBtn.style.display = checked > 0 ? 'inline-block' : 'none';
+      downloadBtn.textContent = '⬇ Download Selected (' + checked + ')';
+    }
+    if (categoryDiv) {
+      categoryDiv.style.display = checked > 0 ? 'flex' : 'none';
+    }
+  }
+
+  // Update button state on checkbox change
+  document.addEventListener('change', function(e) {
+    if (e.target.classList && e.target.classList.contains('provider-checkbox')) {
+      updateActionButtons();
+    }
+  });
+
+  // --- Filter provider table ---
+  window.providerFilter = function() {
+    var searchVal = (document.getElementById('provider-search').value || '').toLowerCase();
+    var typeVal = document.getElementById('provider-type-filter').value;
+    var statusVal = document.getElementById('provider-status-filter').value;
+    var rows = document.querySelectorAll('#provider-table tbody tr');
+
+    rows.forEach(function(row) {
+      var name = (row.querySelector('td strong') || {}).textContent || '';
+      var type = row.getAttribute('data-type') || '';
+      var status = row.getAttribute('data-status') || '';
+
+      var matchSearch = !searchVal || name.toLowerCase().indexOf(searchVal) !== -1;
+      var matchType = !typeVal || type === typeVal;
+      var matchStatus = !statusVal || status === statusVal;
+
+      row.style.display = (matchSearch && matchType && matchStatus) ? '' : 'none';
+    });
+  };
+
+  // --- Auto-refresh every 30 seconds ---
+  var REFRESH_INTERVAL = 30000;
+  var refreshTimer = setInterval(function() {
+    if (document.hidden) return;
+    fetch(window.location.href, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function(resp) { return resp.text(); })
+      .then(function(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newContent = doc.getElementById('provider-refresh');
+        var oldContent = document.getElementById('provider-refresh');
+        if (newContent && oldContent) {
+          oldContent.innerHTML = newContent.innerHTML;
+          // Re-apply current filter
+          providerFilter();
+        }
+      })
+      .catch(function() {
+        // Silently ignore refresh errors
+      });
+  }, REFRESH_INTERVAL);
+})();
+</script>
+{% endblock %}

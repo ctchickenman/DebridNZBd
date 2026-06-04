@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Config — Notifications{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Configuration</h2>
+{% include "_config_tabs.html" %}
+
+<form method="POST" action="/config/notifications">
+
+  <!-- Email Notifications -->
+  <div class="card">
+    <div class="card-header">Email Notifications</div>
+    <div class="card-body">
+      <input type="hidden" name="notifications.email_enabled" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="notifications.email_enabled" value="1" {% if notifications.get('email_enabled', '0') == '1' %}checked{% endif %}> Enable Email Notifications</label>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>SMTP Server</label>
+          <input type="text" name="notifications.email_server" value="{{ notifications.get('email_server', '') }}">
+        </div>
+        <div class="form-group">
+          <label>Email Recipient</label>
+          <input type="text" name="notifications.email_to" value="{{ notifications.get('email_to', '') }}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Email Sender</label>
+          <input type="text" name="notifications.email_from" value="{{ notifications.get('email_from', '') }}">
+        </div>
+        <div class="form-group">
+          <label>Account Name</label>
+          <input type="text" name="notifications.email_account" value="{{ notifications.get('email_account', '') }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Account Password</label>
+        <input type="password" name="notifications.email_password" value="">
+      </div>
+      <div style="margin-top:8px;">
+        <strong>Email Event Triggers</strong>
+        <div class="form-row-3" style="margin-top:8px;">
+          <input type="hidden" name="notifications.email_on_error" value="0">
+          <div class="form-group">
+            <label><input type="checkbox" name="notifications.email_on_error" value="1" {% if notifications.get('email_on_error', '1') == '1' %}checked{% endif %}> Errors</label>
+          </div>
+          <input type="hidden" name="notifications.email_on_complete" value="0">
+          <div class="form-group">
+            <label><input type="checkbox" name="notifications.email_on_complete" value="1" {% if notifications.get('email_on_complete', '0') == '1' %}checked{% endif %}> End of Job</label>
+          </div>
+          <input type="hidden" name="notifications.email_on_disk_full" value="0">
+          <div class="form-group">
+            <label><input type="checkbox" name="notifications.email_on_disk_full" value="1" {% if notifications.get('email_on_disk_full', '1') == '1' %}checked{% endif %}> Disk Full</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Apprise Notifications -->
+  <div class="card">
+    <div class="card-header">Apprise Notifications</div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Apprise URLs</label>
+        <textarea name="notifications.apprise_urls" rows="4" style="width:100%;padding:8px 12px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:4px;color:var(--text-light);font-size:14px;" placeholder="discord://webhook_id/webhook_token&#10;telegram://bottoken/ChatID&#10;slack://tokenA/tokenB/tokenC">{{ notifications.get('apprise_urls', '') }}</textarea>
+        <div class="hint">One URL per line. See <a href="https://github.com/caronc/apprise/wiki" target="_blank" rel="noopener">Apprise wiki</a> for supported services.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Events -->
+  <div class="card">
+    <div class="card-header">Notification Event Triggers</div>
+    <div class="card-body">
+      <table class="queue-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th style="text-align:center;">Notify</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for event in notification_events %}
+          <tr>
+            <td>{{ event.label }}</td>
+            <td style="text-align:center;">
+              <input type="hidden" name="notifications.{{ event.key }}" value="0">
+              <input type="checkbox" name="notifications.{{ event.key }}" value="1" {% if notifications.get(event.key, '0') == '1' %}checked{% endif %}>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <button type="submit" class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+  </div>
+
+</form>
+
+{% endblock %}

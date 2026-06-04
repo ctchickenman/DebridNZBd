@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Queue{% endblock %}
+
+{% block content %}
+
+{% if torbox_connected %}
+<div class="alert alert-info">
+  ℹ️ Queue is active — {{ queue_count }} download{{ "s" if queue_count != 1 else "" }} in progress. Torbox connection: <strong>Connected</strong>
+</div>
+{% else %}
+<div class="alert alert-warning">
+  ⚠️ Torbox is not connected. Configure your API key in <a href="/config">Config</a>.
+</div>
+{% endif %}
+
+<div id="queue-refresh">
+<!-- Summary Bar -->
+<div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
+  <div class="card" style="flex:1; min-width:150px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:var(--primary);">{{ queue_count }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Queue</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:150px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700; color:var(--success);">{{ speed }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Speed</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:150px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700;">{{ size_remaining }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Remaining</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1; min-width:150px;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:24px; font-weight:700;">{{ time_left }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Time Left</div>
+    </div>
+  </div>
+</div>
+
+<!-- Queue Table -->
+<div class="card">
+  <div class="card-header">
+    <span>Download Queue</span>
+    <label class="toggle-switch" style="margin-left:auto; display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-muted);">
+      <input type="checkbox" id="show-completed-toggle" {% if show_completed %}checked{% endif %} onchange="toggleCompleted()">
+      <span class="toggle-slider"></span>
+      Show Completed
+    </label>
+  </div>
+  {% if queue_items %}
+  <table class="queue-table">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Status</th>
+        <th>Torbox</th>
+        <th>Category</th>
+        <th>Priority</th>
+        <th>Progress</th>
+        <th>Size</th>
+        <th>Speed</th>
+        <th>Time Left</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in queue_items %}
+      <tr>
+        <td><strong>{{ item.filename }}</strong></td>
+        <td>
+          <span class="badge badge-{{ item.status_label }}">{{ item.status }}</span>
+        </td>
+        <td style="font-size:12px; color:var(--text-muted);">{{ item.torbox_state if item.torbox_state else '—' }}</td>
+        <td><span class="badge badge-{{ item.status_label }}">{{ item.cat }}</span></td>
+        <td>{{ item.priority_label }}</td>
+        <td>
+          <div class="progress-bar"><div class="fill{% if item.percentage == '100' %} complete{% endif %}" style="width:{{ item.percentage }}%"></div></div>
+          {{ item.percentage }}%
+        </td>
+        <td>{{ item.size }}</td>
+        <td>{{ item.speed }}</td>
+        <td>{{ item.timeleft }}</td>
+        <td class="actions">
+          {% if item.status == 'Paused' %}
+          <button class="btn btn-sm btn-success" title="Resume" onclick="apiAction('resume', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Resumed'})">▶</button>
+          {% else %}
+          <button class="btn btn-sm btn-warning" title="Pause" onclick="apiAction('pause', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Paused'})">⏸</button>
+          {% endif %}
+          <button class="btn btn-sm btn-danger" title="Delete" onclick="apiAction('delete', {nzo_ids: '{{ item.nzo_id }}'}, function() { removeRow(this.closest('tr')); }, {confirm: 'Delete this download?', successMsg: 'Download deleted', errorMsg: 'Delete failed'})">✕</button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card-body" style="text-align:center; color:var(--text-muted); padding:40px;">
+    No downloads in queue. Add a NZB URL or magnet link below to get started.
+  </div>
+  {% endif %}
+</div>
+
+<!-- Completed/Failed History Section -->
+<div id="completed-section" style="display: {% if show_completed %}block{% else %}none{% endif %}; margin-top:16px;">
+  <div class="card">
+    <div class="card-header">
+      <span>Completed &amp; Failed</span>
+    </div>
+    {% if completed_items %}
+    <table class="queue-table">
+      <thead>
+        <tr>
+          <th style="width:30px;"></th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Category</th>
+          <th>Size</th>
+          <th>Download Time</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for item in completed_items %}
+        <tr class="completed-row" data-nzo-id="{{ item.nzo_id }}" onclick="toggleCompletedRow(this)" style="cursor:pointer;">
+          <td class="completed-expand-icon">▸</td>
+          <td><strong>{{ item.name }}</strong></td>
+          <td><span class="badge badge-{{ item.status_label }}">{{ item.status }}</span></td>
+          <td>{{ item.category }}</td>
+          <td>{{ item.size }}</td>
+          <td>{{ item.download_time }}</td>
+          <td style="font-size:12px; color:var(--text-muted);">{{ item.completed }}</td>
+        </tr>
+        <tr class="completed-detail-row" style="display:none;">
+          <td></td>
+          <td colspan="6">
+            <div class="completed-detail">
+              {% if item.path %}
+              <div class="detail-field">
+                <span class="detail-label">Local File:</span>
+                <span class="detail-value" style="word-break:break-all;">{{ item.path }}</span>
+              </div>
+              {% endif %}
+              {% if item.storage %}
+              <div class="detail-field">
+                <span class="detail-label">CDN Link:</span>
+                <span class="detail-value" style="word-break:break-all;">{{ item.storage }}</span>
+              </div>
+              {% endif %}
+              {% if item.fail_message %}
+              <div class="detail-field">
+                <span class="detail-label">Error:</span>
+                <span class="detail-value" style="color:var(--danger);">{{ item.fail_message }}</span>
+              </div>
+              {% endif %}
+              {% if not item.path and not item.storage and not item.fail_message %}
+              <div class="detail-field" style="color:var(--text-muted);">No output path recorded</div>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="card-body" style="text-align:center; color:var(--text-muted); padding:40px;">
+      No completed or failed downloads yet.
+    </div>
+    {% endif %}
+  </div>
+</div>
+</div><!-- end #queue-refresh -->
+
+<!-- Add NZB Section -->
+<div class="card">
+  <div class="card-header">Add NZB</div>
+  <div class="card-body">
+    <div id="add-url-message" style="display:none; margin-bottom:12px;"></div>
+    <form id="add-url-form">
+      <input type="hidden" name="apikey" value="{{ api_key }}">
+      <input type="hidden" name="mode" value="addurl">
+      <div class="form-row">
+        <div class="form-group">
+          <label>URL</label>
+          <input type="url" name="name" id="add-url-input" placeholder="Enter NZB URL or magnet link" required>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select name="cat">
+            <option value="*">Default</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priority</label>
+          <select name="priority">
+            <option value="0">Default</option>
+            <option value="-100">Paused</option>
+            <option value="1">Low</option>
+            <option value="0">Normal</option>
+            <option value="1">High</option>
+            <option value="2">Force</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>NZB Name (optional)</label>
+          <input type="text" name="nzbname" placeholder="Custom download name">
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="submit" class="btn btn-primary" id="add-url-btn">Add URL</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  // --- Toggle completed section ---
+  window.toggleCompleted = function() {
+    var toggle = document.getElementById('show-completed-toggle');
+    var url = new URL(window.location);
+    if (toggle.checked) {
+      url.searchParams.set('show_completed', '1');
+    } else {
+      url.searchParams.delete('show_completed');
+    }
+    window.location.href = url.toString();
+  };
+
+  // --- Toggle completed row detail ---
+  window.toggleCompletedRow = function(row) {
+    var detailRow = row.nextElementSibling;
+    if (detailRow && detailRow.classList.contains('completed-detail-row')) {
+      var isVisible = detailRow.style.display !== 'none';
+      detailRow.style.display = isVisible ? 'none' : 'table-row';
+      row.querySelector('.completed-expand-icon').textContent = isVisible ? '▸' : '▾';
+    }
+  };
+
+  // --- Add URL form: submit via AJAX instead of direct POST ---
+  var form = document.getElementById('add-url-form');
+  var msgDiv = document.getElementById('add-url-message');
+  var btn = document.getElementById('add-url-btn');
+
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      // Clear previous messages
+      msgDiv.style.display = 'none';
+      msgDiv.className = '';
+      msgDiv.textContent = '';
+
+      // Disable button while submitting
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
+
+      var formData = new FormData(form);
+      fetch('/api?mode=addurl', {
+        method: 'POST',
+        body: formData
+      })
+      .then(function(resp) { return resp.json(); })
+      .then(function(data) {
+        if (data.status === true) {
+          // Success — reload page to show new item in queue
+          window.location.reload();
+        } else {
+          // Error — show message
+          msgDiv.style.display = 'block';
+          msgDiv.className = 'alert alert-warning';
+          msgDiv.textContent = data.error || 'Unknown error';
+          btn.disabled = false;
+          btn.textContent = 'Add URL';
+        }
+      })
+      .catch(function(err) {
+        msgDiv.style.display = 'block';
+        msgDiv.className = 'alert alert-warning';
+        msgDiv.textContent = 'Network error: ' + err.message;
+        btn.disabled = false;
+        btn.textContent = 'Add URL';
+      });
+    });
+  }
+
+  // --- Queue auto-refresh ---
+  var REFRESH_INTERVAL = 10000; // 10 seconds
+  var refreshTimer = null;
+  var addUrlInput = document.getElementById('add-url-input');
+
+  function refreshQueue() {
+    // Don't refresh if the page is hidden or the URL input is focused
+    if (document.hidden) return;
+    if (document.activeElement === addUrlInput) return;
+
+    // Preserve show_completed state during refresh
+    var showCompleted = document.getElementById('show-completed-toggle');
+    var url = window.location.pathname;
+    if (showCompleted && showCompleted.checked) {
+      url += '?show_completed=1';
+    }
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(resp) { return resp.text(); })
+      .then(function(html) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+        var newQueue = doc.getElementById('queue-refresh');
+        var oldQueue = document.getElementById('queue-refresh');
+        if (newQueue && oldQueue) {
+          oldQueue.innerHTML = newQueue.innerHTML;
+        }
+      })
+      .catch(function() {
+        // Silently ignore refresh errors
+      });
+  }
+
+  // Only auto-refresh on the home page
+  if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+    refreshTimer = setInterval(refreshQueue, REFRESH_INTERVAL);
+  }
+})();
+</script>
+{% endblock %}

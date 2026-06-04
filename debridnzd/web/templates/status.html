@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Status{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Server Status</h2>
+
+<!-- Connection Status -->
+<div class="card">
+  <div class="card-header">Torbox Connection</div>
+  <div class="card-body">
+    <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+      {% if torbox_connected %}
+      <div class="connection-status connected">
+        <span class="dot"></span> Connected
+      </div>
+      {% else %}
+      <div class="connection-status disconnected">
+        <span class="dot"></span> Not Connected
+      </div>
+      {% endif %}
+      <div style="color:var(--text-muted);">
+        {% if torbox_connected %}API key configured{% else %}Configure your API key in <a href="/config/torbox">Config → Torbox</a>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- System Info -->
+<div class="status-grid">
+  <div class="card">
+    <div class="card-header">System</div>
+    <div class="card-body">
+      <div class="stat-item">
+        <span class="label">DebridNZBd Version</span>
+        <span class="value">{{ system_info.version }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="label">Uptime</span>
+        <span class="value">{{ system_info.uptime }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="label">Load Average</span>
+        <span class="value">{{ system_info.loadavg }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="label">PID</span>
+        <span class="value">{{ system_info.pid }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="label">Logs</span>
+        <span class="value"><a href="/logs">View Logs</a></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Torbox Account</div>
+    <div class="card-body">
+      {% if torbox_connected %}
+      <div class="stat-item">
+        <span class="label">Connection</span>
+        <span class="value" style="color:var(--success);">API key set</span>
+      </div>
+      <div class="stat-item">
+        <span class="label">Status</span>
+        <span class="value">Use "Test Connection" in Config → Torbox</span>
+      </div>
+      {% else %}
+      <div class="stat-item">
+        <span class="label">Connection</span>
+        <span class="value" style="color:var(--danger);">Not configured</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Disk Space -->
+<div class="card">
+  <div class="card-header">Disk Space</div>
+  <div class="card-body">
+    <div class="stat-item">
+      <span class="label">Temporary Download Folder</span>
+      <span class="value">{{ disk_info.incomplete_path }} — {{ disk_info.incomplete_free }}</span>
+    </div>
+    <div class="stat-item">
+      <span class="label">Complete Download Folder</span>
+      <span class="value">{{ disk_info.complete_path }} — {{ disk_info.complete_free }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Warnings -->
+<div class="card">
+  <div class="card-header">
+    <span>Warnings ({{ warnings|length }})</span>
+    {% if warnings %}
+    <button class="btn btn-sm btn-secondary">Clear All</button>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if warnings %}
+    {% for w in warnings %}
+    <div class="alert alert-warning" style="margin-bottom:8px;">
+      ⚠️ {{ w.text }}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="color:var(--text-muted); text-align:center; padding:16px;">No warnings</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

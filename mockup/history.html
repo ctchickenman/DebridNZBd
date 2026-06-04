@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — History</title>
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="history.html" class="active">History</a>
+    <a href="config/general.html">Config</a>
+    <a href="status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">History</h2>
+
+  <!-- Filter Bar -->
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
+      <div class="form-group" style="margin-bottom:0; flex:1; min-width:200px;">
+        <label>Search</label>
+        <input type="text" placeholder="Filter by name...">
+      </div>
+      <div class="form-group" style="margin-bottom:0; width:140px;">
+        <label>Category</label>
+        <select>
+          <option>All</option>
+          <option>Default</option>
+          <option>movies</option>
+          <option>tv</option>
+          <option>audio</option>
+          <option>software</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0; width:140px;">
+        <label>Status</label>
+        <select>
+          <option>All</option>
+          <option>Completed</option>
+          <option>Failed</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:6px; padding-bottom:4px;">
+        <button class="btn btn-sm btn-danger">Delete Failed</button>
+        <button class="btn btn-sm btn-warning">Retry Failed</button>
+        <button class="btn btn-sm btn-secondary">Purge History</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Table -->
+  <div class="card">
+    <table class="queue-table">
+      <thead>
+        <tr>
+          <th style="width:30px;"><input type="checkbox"></th>
+          <th>File</th>
+          <th>Status</th>
+          <th>Category</th>
+          <th>Size</th>
+          <th>Download Time</th>
+          <th>Completed</th>
+          <th>Storage</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><strong>Ubuntu.23.10.LTS.x64.nzb</strong></td>
+          <td><span class="badge badge-complete">Completed</span></td>
+          <td>Default</td>
+          <td>4.2 GB</td>
+          <td>0:12:35</td>
+          <td>2024-01-15 14:22</td>
+          <td style="font-size:11px; max-width:180px; word-break:break-all;">/downloads/complete/Ubuntu.23.10.LTS.x64/</td>
+          <td class="actions">
+            <button class="btn btn-sm btn-danger" title="Delete">✕</button>
+          </td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><strong>Movie.2023.2160p.UHD.BluRay.nzb</strong></td>
+          <td><span class="badge badge-complete">Completed</span></td>
+          <td>movies</td>
+          <td>62.4 GB</td>
+          <td>0:45:12</td>
+          <td>2024-01-14 22:08</td>
+          <td style="font-size:11px; max-width:180px; word-break:break-all;">/downloads/complete/movies/Movie.2023.2160p/</td>
+          <td class="actions">
+            <button class="btn btn-sm btn-danger" title="Delete">✕</button>
+          </td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><strong>Show.S02E01.1080p.WEB.h264.nzb</strong></td>
+          <td><span class="badge badge-complete">Completed</span></td>
+          <td>tv</td>
+          <td>1.8 GB</td>
+          <td>0:05:22</td>
+          <td>2024-01-14 19:30</td>
+          <td style="font-size:11px; max-width:180px; word-break:break-all;">/downloads/complete/tv/Show/Season 2/</td>
+          <td class="actions">
+            <button class="btn btn-sm btn-danger" title="Delete">✕</button>
+          </td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><strong>Album.Artist.Discography.FLAC.nzb</strong></td>
+          <td><span class="badge badge-failed">Failed</span></td>
+          <td>audio</td>
+          <td>1.2 GB</td>
+          <td>—</td>
+          <td>2024-01-13 11:45</td>
+          <td style="font-size:11px; max-width:180px; color:var(--danger);">Error: CDN link expired</td>
+          <td class="actions">
+            <button class="btn btn-sm btn-warning" title="Retry">↻</button>
+            <button class="btn btn-sm btn-danger" title="Delete">✕</button>
+          </td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><strong>Software.v5.1.Linux.x64.nzb</strong></td>
+          <td><span class="badge badge-complete">Completed</span></td>
+          <td>software</td>
+          <td>320 MB</td>
+          <td>0:01:45</td>
+          <td>2024-01-12 08:15</td>
+          <td style="font-size:11px; max-width:180px; word-break:break-all;">/downloads/complete/software/Software.v5.1/</td>
+          <td class="actions">
+            <button class="btn btn-sm btn-danger" title="Delete">✕</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- History Stats -->
+  <div style="display:flex; gap:16px; margin-top:8px;">
+    <div class="card" style="flex:1;">
+      <div class="card-body" style="text-align:center;">
+        <div style="font-size:20px; font-weight:700; color:var(--success);">4</div>
+        <div style="color:var(--text-muted); font-size:12px;">Completed Today</div>
+      </div>
+    </div>
+    <div class="card" style="flex:1;">
+      <div class="card-body" style="text-align:center;">
+        <div style="font-size:20px; font-weight:700; color:var(--danger);">1</div>
+        <div style="color:var(--text-muted); font-size:12px;">Failed</div>
+      </div>
+    </div>
+    <div class="card" style="flex:1;">
+      <div class="card-body" style="text-align:center;">
+        <div style="font-size:20px; font-weight:700;">68.7 GB</div>
+        <div style="color:var(--text-muted); font-size:12px;">Total Downloaded</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

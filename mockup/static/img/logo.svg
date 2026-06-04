@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Download arrow -->
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="#1a1a2e" stroke="#4a90d9" stroke-width="2"/>
+  <!-- Top bar (debrid/cloud) -->
+  <path d="M16 22 C16 16 22 12 28 14 C30 10 38 10 40 14 C46 12 50 16 50 22 C50 26 46 28 42 28 L22 28 C18 28 16 26 16 22Z" fill="#4a90d9" opacity="0.8"/>
+  <!-- Download arrow -->
+  <path d="M32 28 L32 46" stroke="#27ae60" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 40 L32 48 L40 40" stroke="#27ae60" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- NZB lines -->
+  <line x1="18" y1="34" x2="26" y2="34" stroke="#4a90d9" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  <line x1="38" y1="34" x2="46" y2="34" stroke="#4a90d9" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  <line x1="18" y1="38" x2="26" y2="38" stroke="#4a90d9" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+  <line x1="38" y1="38" x2="46" y2="38" stroke="#4a90d9" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+</svg>

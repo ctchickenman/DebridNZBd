@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Categories</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html" class="active">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <div class="alert alert-info">
+    ℹ️ Categories determine how downloads are processed and where they're stored. Each category row has its own save button.
+  </div>
+
+  <form>
+
+    <!-- Categories Table -->
+    <div class="card">
+      <div class="card-header">
+        <span>Categories</span>
+        <button class="btn btn-sm btn-primary">+ Add Category</button>
+      </div>
+      <table class="queue-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Priority</th>
+            <th>Processing</th>
+            <th>Script</th>
+            <th>Folder/Path</th>
+            <th>Indexer Tags / Groups</th>
+            <th style="width:60px;">Save</th>
+            <th style="width:60px;">Delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Default</strong> <span style="color:var(--text-muted);">*</span></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Default</option>
+                <option>Paused</option>
+                <option>Low</option>
+                <option>Normal</option>
+                <option>High</option>
+                <option>Force</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Default</option>
+                <option>None</option>
+                <option>+Repair</option>
+                <option>+Repair +Unpack</option>
+                <option>+Repair +Unpack +Delete</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Default</option>
+              </select>
+            </td>
+            <td><input type="text" value="" style="width:120px;"></td>
+            <td><input type="text" value="" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-primary">Save</button></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td><strong>movies</strong></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option>Paused</option>
+                <option>Low</option>
+                <option selected>Normal</option>
+                <option>High</option>
+                <option>Force</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option>None</option>
+                <option>+Repair</option>
+                <option>+Repair +Unpack</option>
+                <option selected>+Repair +Unpack +Delete</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Default</option>
+              </select>
+            </td>
+            <td><input type="text" value="movies" style="width:120px;"></td>
+            <td><input type="text" value="alt.bin.movies, alt.bin.hdtv" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-primary">Save</button></td>
+            <td><button class="btn btn-sm btn-danger">✕</button></td>
+          </tr>
+          <tr>
+            <td><strong>tv</strong></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option>Paused</option>
+                <option>Low</option>
+                <option selected>Normal</option>
+                <option>High</option>
+                <option>Force</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option>None</option>
+                <option>+Repair</option>
+                <option selected>+Repair +Unpack</option>
+                <option>+Repair +Unpack +Delete</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Default</option>
+              </select>
+            </td>
+            <td><input type="text" value="tv" style="width:120px;"></td>
+            <td><input type="text" value="alt.bin.tv, alt.bin.television" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-primary">Save</button></td>
+            <td><button class="btn btn-sm btn-danger">✕</button></td>
+          </tr>
+          <tr>
+            <td><strong>audio</strong></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option>Paused</option>
+                <option>Low</option>
+                <option selected>Normal</option>
+                <option>High</option>
+                <option>Force</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option selected>+Repair</option>
+                <option>+Repair +Unpack</option>
+                <option>+Repair +Unpack +Delete</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Default</option>
+              </select>
+            </td>
+            <td><input type="text" value="audio" style="width:120px;"></td>
+            <td><input type="text" value="alt.bin.sounds, alt.bin.music" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-primary">Save</button></td>
+            <td><button class="btn btn-sm btn-danger">✕</button></td>
+          </tr>
+          <tr>
+            <td><strong>software</strong></td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option>Paused</option>
+                <option>Low</option>
+                <option selected>Normal</option>
+                <option>High</option>
+                <option>Force</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option>Default</option>
+                <option selected>+Repair</option>
+                <option>+Repair +Unpack</option>
+                <option>+Repair +Unpack +Delete</option>
+              </select>
+            </td>
+            <td>
+              <select style="width:auto; padding:4px;">
+                <option selected>Default</option>
+              </select>
+            </td>
+            <td><input type="text" value="software" style="width:120px;"></td>
+            <td><input type="text" value="alt.bin.warez" style="width:120px;"></td>
+            <td><button class="btn btn-sm btn-primary">Save</button></td>
+            <td><button class="btn btn-sm btn-danger">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

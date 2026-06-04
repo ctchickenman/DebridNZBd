@@ -1,0 +1,35 @@
+# DebridNZBd — Docker Compose configuration
+#
+# Quick start:
+#   docker compose up -d
+#
+# The API will be available at http://localhost:8080
+# Configure your Torbox API key through the web UI or API after first run.
+# Data persists in the "debridnzd-data" named volume across container recreations.
+#
+# To use a host bind mount instead of a named volume:
+#   Replace the "debridnzd-data" volume with a host path:
+#     volumes:
+#       - /path/to/your/data:/data
+#   Ensure the host directory is owned by UID 1000:
+#     chown 1000:1000 /path/to/your/data
+#
+# To run as your current user instead of UID 1000:
+#   Add user: "${UID}:${GID}" to the service config
+
+services:
+  debridnzd:
+    image: debridnzd:latest
+    build: .
+    container_name: debridnzd
+    ports:
+      - "8080:8080"
+    volumes:
+      - debridnzd-data:/data
+      - /Share/ed/debrid:/data/downloads
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+
+volumes:
+  debridnzd-data:

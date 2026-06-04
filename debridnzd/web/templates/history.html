@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — History{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">History</h2>
+
+<!-- Filter Bar -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
+    <div class="form-group" style="margin-bottom:0; flex:1; min-width:200px;">
+      <label>Search</label>
+      <input type="text" placeholder="Filter by name...">
+    </div>
+    <div class="form-group" style="margin-bottom:0; width:140px;">
+      <label>Category</label>
+      <select>
+        <option>All</option>
+        {% for cat in categories %}
+        <option>{{ cat if cat != '*' else 'Default' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:0; width:140px;">
+      <label>Status</label>
+      <select>
+        <option>All</option>
+        <option>Completed</option>
+        <option>Failed</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:6px; padding-bottom:4px;">
+      <button class="btn btn-sm btn-danger" onclick="apiAction('purge', {failed_only: '1'}, function() { window.location.reload(); }, {confirm: 'Delete all failed history entries?', successMsg: 'Failed entries deleted', errorMsg: 'Delete failed'})">Delete Failed</button>
+      <button class="btn btn-sm btn-warning" onclick="apiAction('retry_all', {}, function() { window.location.reload(); }, {confirm: 'Retry all failed downloads?', successMsg: 'Retrying all failed downloads', errorMsg: 'Retry failed'})">Retry Failed</button>
+      <button class="btn btn-sm btn-secondary" onclick="apiAction('purge', {}, function() { window.location.reload(); }, {confirm: 'Purge all history entries?', successMsg: 'History purged', errorMsg: 'Purge failed'})">Purge History</button>
+    </div>
+  </div>
+</div>
+
+<!-- History Table -->
+<div class="card">
+  {% if history_items %}
+  <table class="queue-table">
+    <thead>
+      <tr>
+        <th style="width:30px;"><input type="checkbox"></th>
+        <th>File</th>
+        <th>Status</th>
+        <th>Category</th>
+        <th>Size</th>
+        <th>Download Time</th>
+        <th>Completed</th>
+        <th>Local Path</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in history_items %}
+      <tr>
+        <td><input type="checkbox"></td>
+        <td><strong>{{ item.name }}</strong></td>
+        <td><span class="badge badge-{{ 'complete' if item.status == 'Completed' else 'failed' }}">{{ item.status }}</span></td>
+        <td>{{ item.category if item.category != '*' else 'Default' }}</td>
+        <td>{{ item.size }}</td>
+        <td>{{ item.download_time }}</td>
+        <td>{{ item.completed }}</td>
+        <td style="font-size:11px; max-width:200px; word-break:break-all;">
+          {% if item.path %}
+          {{ item.path }}
+          {% elif item.fail_message %}
+          <span style="color:var(--danger);">{{ item.fail_message }}</span>
+          {% elif item.storage %}
+          <span style="color:var(--text-muted);">{{ item.storage }}</span>
+          {% else %}
+          <span style="color:var(--text-muted);">—</span>
+          {% endif %}
+        </td>
+        <td class="actions">
+          {% if item.status == 'Failed' %}
+          <button class="btn btn-sm btn-warning" title="Retry" onclick="apiAction('retry', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retrying download', errorMsg: 'Retry failed'})">↻</button>
+          {% endif %}
+          <button class="btn btn-sm btn-danger" title="Delete" onclick="apiAction('delete', {nzo_ids: '{{ item.nzo_id }}'}, function() { removeRow(this.closest('tr')); }, {confirm: 'Delete this history entry?', successMsg: 'Entry deleted', errorMsg: 'Delete failed'})">✕</button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card-body" style="text-align:center; color:var(--text-muted); padding:40px;">
+    No history entries yet. Completed and failed downloads will appear here.
+  </div>
+  {% endif %}
+</div>
+
+<!-- History Stats -->
+<div style="display:flex; gap:16px; margin-top:8px;">
+  <div class="card" style="flex:1;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:20px; font-weight:700; color:var(--success);">{{ history_stats.today_completed }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Completed</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:20px; font-weight:700; color:var(--danger);">{{ history_stats.failed }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Failed</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1;">
+    <div class="card-body" style="text-align:center;">
+      <div style="font-size:20px; font-weight:700;">{{ history_stats.total_downloaded }}</div>
+      <div style="color:var(--text-muted); font-size:12px;">Total Downloaded</div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

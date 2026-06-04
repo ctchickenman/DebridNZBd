@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Status</title>
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="history.html">History</a>
+    <a href="config/general.html">Config</a>
+    <a href="status.html" class="active">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Server Status</h2>
+
+  <!-- Connection Status -->
+  <div class="card">
+    <div class="card-header">Torbox Connection</div>
+    <div class="card-body">
+      <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+        <div class="connection-status connected">
+          <span class="dot"></span> Connected
+        </div>
+        <div style="color:var(--text-muted);">
+          Last checked: 2024-01-15 14:30:22 UTC
+        </div>
+        <button class="btn btn-sm btn-outline">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Info -->
+  <div class="status-grid">
+    <div class="card">
+      <div class="card-header">System</div>
+      <div class="card-body">
+        <div class="stat-item">
+          <span class="label">DebridNZBd Version</span>
+          <span class="value">1.0.0</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Uptime</span>
+          <span class="value">2d 14h 32m</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">CPU Model</span>
+          <span class="value">AMD Ryzen 5 5600X</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Load Average</span>
+          <span class="value">0.42 / 0.38 / 0.35</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">PID</span>
+          <span class="value">12345</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Torbox Account</div>
+      <div class="card-body">
+        <div class="stat-item">
+          <span class="label">Plan</span>
+          <span class="value" style="color:var(--success);">Pro</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Premium Expires</span>
+          <span class="value">2025-06-15</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Total Downloaded</span>
+          <span class="value">342.7 GB</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Active Downloads</span>
+          <span class="value">3</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Cached Available</span>
+          <span class="value">Yes</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disk Space -->
+  <div class="card">
+    <div class="card-header">Disk Space</div>
+    <div class="card-body">
+      <div class="stat-item">
+        <span class="label">Temporary Download Folder</span>
+        <span class="value">/downloads/incomplete — 245 GB free of 500 GB</span>
+      </div>
+      <div class="stat-item">
+        <span class="label">Complete Download Folder</span>
+        <span class="value">/downloads/complete — 245 GB free of 500 GB</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warnings -->
+  <div class="card">
+    <div class="card-header">
+      <span>Warnings (1)</span>
+      <button class="btn btn-sm btn-secondary">Clear All</button>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-warning" style="margin-bottom:8px;">
+        ⚠️ 2024-01-15 13:45 — CDN link expired for "Album.Artist.Discography.FLAC.nzb", retrying...
+      </div>
+    </div>
+  </div>
+
+  <!-- Download Stats -->
+  <div class="card">
+    <div class="card-header">Download Statistics</div>
+    <div class="card-body">
+      <div class="status-grid">
+        <div>
+          <div class="stat-item">
+            <span class="label">Today</span>
+            <span class="value">4.2 GB</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">This Week</span>
+            <span class="value">28.6 GB</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">This Month</span>
+            <span class="value">68.7 GB</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">All Time</span>
+            <span class="value">342.7 GB</span>
+          </div>
+        </div>
+        <div>
+          <div class="stat-item">
+            <span class="label">Avg Speed (Today)</span>
+            <span class="value">2.1 MB/s</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">Jobs Completed</span>
+            <span class="value">127</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">Jobs Failed</span>
+            <span class="value">3</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">Queue Paused</span>
+            <span class="value">No</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebridNZBd — Config — Sorting</title>
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="../index.html" class="brand">Debrid<span>NZBd</span></a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../history.html">History</a>
+    <a href="general.html" class="active">Config</a>
+    <a href="../status.html">Status</a>
+  </nav>
+  <div class="right">
+    <span class="speed">↓ 4.2 MB/s</span>
+    <button class="pause-btn">⏸ Pause</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <h2 style="margin-top:0;">Configuration</h2>
+
+  <div class="config-tabs">
+    <a href="general.html">General</a>
+    <a href="folders.html">Folders</a>
+    <a href="torbox.html">Torbox</a>
+    <a href="categories.html">Categories</a>
+    <a href="switches.html">Switches</a>
+    <a href="sorting.html" class="active">Sorting</a>
+    <a href="notifications.html">Notifications</a>
+    <a href="scheduling.html">Scheduling</a>
+    <a href="rss.html">RSS</a>
+    <a href="special.html">Special</a>
+  </div>
+
+  <form>
+
+    <!-- TV Sorting -->
+    <div class="card">
+      <div class="card-header">TV Sorting</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox"> Enable TV Sorting</label>
+        </div>
+        <div class="form-group">
+          <label>Sort String</label>
+          <input type="text" value="%sn/Season %s/%sn - S%0sE%0e - %en.%ext">
+          <div class="hint">
+            Available patterns: <code>%sn</code> (show name), <code>%s</code> (season number),
+            <code>%0s</code> (season with leading zero), <code>%en</code> (episode name),
+            <code>%e</code> (episode number), <code>%0e</code> (episode with leading zero),
+            <code>%ext</code> (file extension), <code>%y</code> (year), <code>%m</code> (month),
+            <code>%d</code> (day)
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Apply to Categories</label>
+          <input type="text" value="tv" placeholder="Comma-separated category names">
+        </div>
+      </div>
+    </div>
+
+    <!-- Movie Sorting -->
+    <div class="card">
+      <div class="card-header">Movie Sorting</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox"> Enable Movie sorting</label>
+        </div>
+        <div class="form-group">
+          <label>Sort String</label>
+          <input type="text" value="%title (%y)/%title (%y).%ext">
+          <div class="hint">
+            Available patterns: <code>%title</code> (movie title), <code>%y</code> (year),
+            <code>%ext</code> (file extension)
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Apply to Categories</label>
+          <input type="text" value="movies" placeholder="Comma-separated category names">
+        </div>
+      </div>
+    </div>
+
+    <!-- Date Sorting -->
+    <div class="card">
+      <div class="card-header">Date Sorting</div>
+      <div class="card-body">
+        <div class="form-group">
+          <label><input type="checkbox"> Enable Date sorting</label>
+        </div>
+        <div class="form-group">
+          <label>Sort String</label>
+          <input type="text" value="%t/%t - %y-%0m-%0d - %desc.%ext">
+          <div class="hint">
+            Available patterns: <code>%t</code> (title), <code>%y</code> (year),
+            <code>%0m</code> (month with leading zero), <code>%0d</code> (day with leading zero),
+            <code>%desc</code> (description), <code>%ext</code> (file extension)
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Apply to Categories</label>
+          <input type="text" value="" placeholder="Comma-separated category names">
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Sorters -->
+    <div class="card">
+      <div class="card-header">
+        <span>Custom Sorters</span>
+        <button class="btn btn-sm btn-primary">+ Add Sorter</button>
+      </div>
+      <table class="queue-table">
+        <thead>
+          <tr>
+            <th>Sort String</th>
+            <th>Categories</th>
+            <th>Type</th>
+            <th style="width:80px;">Delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="3" style="text-align:center; color:var(--text-muted); padding:24px;">
+              No custom sorters configured. Click "Add Sorter" to create one.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+    </div>
+
+  </form>
+
+  <div class="footer">
+    DebridNZBd v1.0.0 — SABnzbd-compatible API powered by Torbox
+  </div>
+
+</div>
+
+</body>
+</html>

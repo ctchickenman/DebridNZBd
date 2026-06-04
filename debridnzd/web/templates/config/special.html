@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Config — Special{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Configuration</h2>
+{% include "_config_tabs.html" %}
+
+<form method="POST" action="/config/special">
+
+  <!-- Special Settings -->
+  <div class="card">
+    <div class="card-header">Special Settings</div>
+    <div class="card-body">
+      <table class="queue-table">
+        <thead>
+          <tr>
+            <th>Setting</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Start downloads paused</td>
+            <td><input type="hidden" name="special.start_paused" value="0"><label><input type="checkbox" name="special.start_paused" value="1" {% if special.get('start_paused', '0') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Preserve paused state on restart</td>
+            <td><input type="hidden" name="special.preserve_paused_state" value="0"><label><input type="checkbox" name="special.preserve_paused_state" value="1" {% if special.get('preserve_paused_state', '0') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Overwrite existing files</td>
+            <td><input type="hidden" name="special.overwrite_files" value="0"><label><input type="checkbox" name="special.overwrite_files" value="1" {% if special.get('overwrite_files', '0') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Enable API warnings</td>
+            <td><input type="hidden" name="special.api_warnings" value="0"><label><input type="checkbox" name="special.api_warnings" value="1" {% if special.get('api_warnings', '1') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Helpful warnings</td>
+            <td><input type="hidden" name="special.helpful_warnings" value="0"><label><input type="checkbox" name="special.helpful_warnings" value="1" {% if special.get('helpful_warnings', '1') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Disable API key (dangerous)</td>
+            <td><input type="hidden" name="special.disable_api_key" value="0"><label><input type="checkbox" name="special.disable_api_key" value="1" {% if special.get('disable_api_key', '0') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>API logging</td>
+            <td><input type="hidden" name="special.api_logging" value="0"><label><input type="checkbox" name="special.api_logging" value="1" {% if special.get('api_logging', '1') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Debug mode <span class="hint">(verbose logging)</span></td>
+            <td><input type="hidden" name="special.debug_mode" value="0"><label><input type="checkbox" name="special.debug_mode" value="1" {% if special.get('debug_mode', '0') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Enable X-Frame-Options header</td>
+            <td><input type="hidden" name="special.x_frame_options" value="0"><label><input type="checkbox" name="special.x_frame_options" value="1" {% if special.get('x_frame_options', '1') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>URL Base</td>
+            <td><input type="text" name="special.url_base" value="{{ special.get('url_base', '/') }}" style="width:200px;"></td>
+          </tr>
+          <tr>
+            <td>Size limit for accepting NZBs</td>
+            <td><input type="text" name="special.size_limit" value="{{ special.get('size_limit', '0') }}" style="width:200px;"> <span class="hint">0 = no limit</span></td>
+          </tr>
+          <tr>
+            <td>Nomedia marker file</td>
+            <td><input type="text" name="special.nomedia_marker" value="{{ special.get('nomedia_marker', '.nomedia') }}" style="width:200px;"></td>
+          </tr>
+          <tr>
+            <td>Maximum folder name length</td>
+            <td><input type="number" name="special.max_foldername_length" value="{{ special.get('max_foldername_length', '246') }}" style="width:200px;"></td>
+          </tr>
+          <tr>
+            <td>Allow old SSL/TLS versions</td>
+            <td><input type="hidden" name="special.allow_old_ssl_tls" value="0"><label><input type="checkbox" name="special.allow_old_ssl_tls" value="1" {% if special.get('allow_old_ssl_tls', '0') == '1' %}checked{% endif %}></label></td>
+          </tr>
+          <tr>
+            <td>Config lock</td>
+            <td><input type="hidden" name="special.config_lock" value="0"><label><input type="checkbox" name="special.config_lock" value="1" {% if special.get('config_lock', '0') == '1' %}checked{% endif %}></label></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Backup & Restore -->
+  <div class="card">
+    <div class="card-header">Backup &amp; Restore</div>
+    <div class="card-body">
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-secondary">Create Backup</button>
+        <button type="button" class="btn btn-warning">Restore Backup</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">Backups include all configuration, API keys, and database contents. Store backup files securely as they contain sensitive data.</div>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="card">
+    <div class="card-header">Logs</div>
+    <div class="card-body">
+      <a href="/logs" class="btn btn-primary">View Logs</a>
+      <div class="hint" style="margin-top:8px;">View application logs for debugging and troubleshooting.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <button type="submit" class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+  </div>
+
+</form>
+
+{% endblock %}

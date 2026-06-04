@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Config — Sorting{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Configuration</h2>
+{% include "_config_tabs.html" %}
+
+<form method="POST" action="/config/sorting">
+
+  <!-- TV Sorting -->
+  <div class="card">
+    <div class="card-header">TV Sorting</div>
+    <div class="card-body">
+      <input type="hidden" name="sorting.enable_tv_sorting" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="sorting.enable_tv_sorting" value="1" {% if sorting.get('enable_tv_sorting', '0') == '1' %}checked{% endif %}> Enable TV Sorting</label>
+      </div>
+      <div class="form-group">
+        <label>Sort String</label>
+        <input type="text" name="sorting.tv_sort_string" value="{{ sorting.get('tv_sort_string', '%sn/Season %s/%sn - S%0sE%0e - %en.%ext') }}">
+        <div class="hint">Patterns: %sn (show name), %s (season), %0s (season zero-padded), %en (episode name), %e (episode), %0e (episode zero-padded), %ext, %y, %m, %d</div>
+      </div>
+      <div class="form-group">
+        <label>Apply to Categories</label>
+        <input type="text" name="sorting.tv_sort_cats" value="{{ sorting.get('tv_sort_cats', 'tv') }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Movie Sorting -->
+  <div class="card">
+    <div class="card-header">Movie Sorting</div>
+    <div class="card-body">
+      <input type="hidden" name="sorting.enable_movie_sorting" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="sorting.enable_movie_sorting" value="1" {% if sorting.get('enable_movie_sorting', '0') == '1' %}checked{% endif %}> Enable Movie Sorting</label>
+      </div>
+      <div class="form-group">
+        <label>Sort String</label>
+        <input type="text" name="sorting.movie_sort_string" value="{{ sorting.get('movie_sort_string', '%title (%y)/%title (%y).%ext') }}">
+        <div class="hint">Patterns: %title, %y (year), %ext</div>
+      </div>
+      <div class="form-group">
+        <label>Apply to Categories</label>
+        <input type="text" name="sorting.movie_sort_cats" value="{{ sorting.get('movie_sort_cats', 'movies') }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Date Sorting -->
+  <div class="card">
+    <div class="card-header">Date Sorting</div>
+    <div class="card-body">
+      <input type="hidden" name="sorting.enable_date_sorting" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="sorting.enable_date_sorting" value="1" {% if sorting.get('enable_date_sorting', '0') == '1' %}checked{% endif %}> Enable Date Sorting</label>
+      </div>
+      <div class="form-group">
+        <label>Sort String</label>
+        <input type="text" name="sorting.date_sort_string" value="{{ sorting.get('date_sort_string', '%t/%t - %y-%0m-%0d - %desc.%ext') }}">
+        <div class="hint">Patterns: %t (title), %y, %0m (month zero-padded), %0d (day zero-padded), %desc, %ext</div>
+      </div>
+      <div class="form-group">
+        <label>Apply to Categories</label>
+        <input type="text" name="sorting.date_sort_cats" value="{{ sorting.get('date_sort_cats', '') }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Sorters -->
+  <div class="card">
+    <div class="card-header">Custom Sorters</div>
+    <div class="card-body">
+      {% if sorters %}
+      <table class="queue-table">
+        <thead>
+          <tr>
+            <th>Sort String</th>
+            <th>Categories</th>
+            <th>Enabled</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for s in sorters %}
+          <tr>
+            <td>{{ s.sort_string }}</td>
+            <td>{{ s.categories }}</td>
+            <td>{% if s.enabled %}Yes{% else %}No{% endif %}</td>
+            <td class="actions">
+              <form method="POST" action="/api?mode=delete" style="display:inline">
+                <button type="submit" class="btn btn-sm btn-danger" title="Delete">✕</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="color:var(--text-muted); text-align:center; padding:16px;">No custom sorters configured.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <button type="submit" class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+  </div>
+
+</form>
+
+{% endblock %}

@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}DebridNZBd — Config — General{% endblock %}
+
+{% block content %}
+
+<h2 style="margin-top:0;">Configuration</h2>
+{% include "_config_tabs.html" %}
+
+<form method="POST" action="/config/general">
+
+  <!-- Web Server -->
+  <div class="card">
+    <div class="card-header">Web Server</div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>SABnzbd Host</label>
+          <input type="text" name="misc.host" value="{{ misc.get('host', '127.0.0.1') }}">
+          <div class="hint">Hostname for the web server. 0.0.0.0 for all interfaces.</div>
+        </div>
+        <div class="form-group">
+          <label>SABnzbd Port</label>
+          <input type="number" name="misc.port" value="{{ misc.get('port', '8080') }}">
+          <div class="hint">Port for the web server.</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Web Interface Theme</label>
+          <select name="misc.theme">
+            <option {% if misc.get('theme', 'default') == 'default' %}selected{% endif %}>Default</option>
+            <option {% if misc.get('theme') == 'Glitter' %}selected{% endif %}>Glitter</option>
+            <option {% if misc.get('theme') == 'Plush' %}selected{% endif %}>Plush</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Language</label>
+          <select name="misc.language">
+            <option {% if misc.get('language', 'en') == 'en' %}selected{% endif %} value="en">English</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HTTPS -->
+  <div class="card">
+    <div class="card-header">
+      <span>HTTPS</span>
+      <span class="advanced-toggle" style="cursor:pointer;">Show Advanced ▾</span>
+    </div>
+    <div class="card-body">
+      <input type="hidden" name="misc.https_enabled" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="misc.https_enabled" value="1" {% if misc.get('https_enabled', '0') == '1' %}checked{% endif %}> Enable HTTPS</label>
+      </div>
+      <div class="advanced-settings">
+        <div class="form-row">
+          <div class="form-group">
+            <label>HTTPS Port</label>
+            <input type="number" name="misc.https_port" value="{{ misc.get('https_port', '') }}">
+          </div>
+          <div class="form-group">
+            <label>HTTPS Certificate</label>
+            <input type="text" name="misc.https_cert" value="{{ misc.get('https_cert', '') }}" placeholder="Path to certificate file">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>HTTPS Key</label>
+            <input type="text" name="misc.https_key" value="{{ misc.get('https_key', '') }}" placeholder="Path to key file">
+          </div>
+          <div class="form-group">
+            <label>HTTPS Chain Certificates</label>
+            <input type="text" name="misc.https_chain" value="{{ misc.get('https_chain', '') }}" placeholder="Path to chain certificate">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security -->
+  <div class="card">
+    <div class="card-header">Security</div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="misc.username" value="{{ misc.get('username', '') }}" placeholder="Leave empty for no auth">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="misc.password" value="" placeholder="Leave empty for no auth">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>External Internet Access</label>
+        <select name="misc.external_access">
+          <option {% if misc.get('external_access', 'Full API') == 'No access' %}selected{% endif %}>No access</option>
+          <option {% if misc.get('external_access') == 'Add NZB files' %}selected{% endif %}>Add NZB files</option>
+          <option {% if misc.get('external_access') == 'API (no config)' %}selected{% endif %}>API (no config)</option>
+          <option {% if misc.get('external_access') == 'Full API' %}selected{% endif %}>Full API</option>
+          <option {% if misc.get('external_access') == 'Full Web Interface' %}selected{% endif %}>Full Web Interface</option>
+        </select>
+        <div class="hint">Controls what is accessible from outside the local network.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>API Key</label>
+          <div style="display:flex; gap:8px; align-items:start;">
+            <input type="password" id="misc-api-key" value="{{ misc.get('api_key', '') }}" readonly style="flex:1; font-family:monospace;">
+            <button type="button" class="btn btn-sm btn-outline" onclick="toggleKey('misc-api-key', this)">Show</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="copyKey('misc-api-key')">Copy</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>NZB Key</label>
+          <div style="display:flex; gap:8px; align-items:start;">
+            <input type="password" id="misc-nzb-key" value="{{ misc.get('nzb_key', '') }}" readonly style="flex:1; font-family:monospace;">
+            <button type="button" class="btn btn-sm btn-outline" onclick="toggleKey('misc-nzb-key', this)">Show</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="copyKey('misc-nzb-key')">Copy</button>
+          </div>
+          <div class="hint">NZB key allows adding NZBs but not monitoring the queue.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Startup -->
+  <div class="card">
+    <div class="card-header">Startup</div>
+    <div class="card-body">
+      <input type="hidden" name="misc.launch_browser" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="misc.launch_browser" value="1" {% if misc.get('launch_browser', '1') == '1' %}checked{% endif %}> Launch browser on startup</label>
+      </div>
+      <input type="hidden" name="misc.check_new_release" value="0">
+      <div class="form-group">
+        <label><input type="checkbox" name="misc.check_new_release" value="1" {% if misc.get('check_new_release', '0') == '1' %}checked{% endif %}> Check for new release</label>
+        <div class="hint">Checks weekly for DebridNZBd updates.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tuning -->
+  <div class="card">
+    <div class="card-header">
+      <span>Tuning</span>
+      <span class="advanced-toggle" style="cursor:pointer;">Show Advanced ▾</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Maximum Line Speed</label>
+        <input type="text" name="misc.max_line_speed" value="{{ misc.get('max_line_speed', '0') }}" placeholder="e.g., 10M for 10 MB/s, 0 = unlimited">
+        <div class="hint">Enter your internet connection speed. Used to calculate time estimates.</div>
+      </div>
+      <div class="advanced-settings">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Percentage of Line Speed</label>
+            <input type="number" name="misc.speedlimit" value="{{ misc.get('speedlimit', '100') }}" min="0" max="100">
+            <div class="hint">0 = no limit. This is the speed limit applied when not using the speed slider.</div>
+          </div>
+          <div class="form-group">
+            <label>Article Cache Limit</label>
+            <input type="text" name="misc.article_cache_limit" value="{{ misc.get('article_cache_limit', '0') }}">
+            <div class="hint">RAM for caching. 0 = disabled, -1 = unlimited.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <button type="submit" class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleKey(inputId, btn) {
+  var input = document.getElementById(inputId);
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = 'Hide';
+  } else {
+    input.type = 'password';
+    btn.textContent = 'Show';
+  }
+}
+function copyKey(inputId) {
+  var input = document.getElementById(inputId);
+  navigator.clipboard.writeText(input.value).then(function() {
+    var btn = input.parentElement.querySelector('.btn-outline:last-child');
+    var orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = orig; }, 1500);
+  });
+}
+</script>
+{% endblock %}
