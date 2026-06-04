@@ -17,7 +17,77 @@ DebridNZBd implements the SABnzbd API so that existing clients (Sonarr, Radarr, 
 - **Notifications** — Email and Apprise notifications
 - **Scheduling** — Time-based pause/resume/speedlimit
 
-## Quick Start
+## Installation
+
+### Docker (recommended)
+
+The easiest way to run DebridNZBd is with Docker using the pre-built image from GitHub Container Registry.
+
+#### Using Docker Compose
+
+Create a `docker-compose.yml`:
+
+```yaml
+services:
+  debridnzd:
+    image: ghcr.io/ctchickenman/debridnzd:latest
+    container_name: debridnzd
+    ports:
+      - "8080:8080"
+    volumes:
+      - debridnzd-data:/data
+      - /path/to/downloads:/data/downloads
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+
+volumes:
+  debridnzd-data:
+```
+
+Then run:
+
+```bash
+docker compose up -d
+```
+
+#### Using Docker CLI
+
+```bash
+docker run -d \
+  --name debridnzd \
+  -p 8080:8080 \
+  -v debridnzd-data:/data \
+  -v /path/to/downloads:/data/downloads \
+  -e TZ=UTC \
+  --restart unless-stopped \
+  ghcr.io/ctchickenman/debridnzd:latest
+```
+
+#### Building from source
+
+If you prefer to build the image yourself:
+
+```bash
+git clone https://github.com/ctchickenman/DebridNZBd.git
+cd DebridNZBd
+docker compose up -d --build
+```
+
+#### Volumes
+
+| Volume | Description |
+|---|---|
+| `/data` | Database, config, logs, and internal data |
+| `/data/downloads` | Download output (incomplete + complete files) |
+
+To use a host directory for downloads, bind-mount it to `/data/downloads`. Ensure the host directory is writable by UID 1000 (the container's default user):
+
+```bash
+chown -R 1000:1000 /path/to/downloads
+```
+
+### pip (for development)
 
 ```bash
 # Install
@@ -30,11 +100,11 @@ debridnzd
 python -m debridnzd
 ```
 
-Open http://127.0.0.1:8080 in your browser and configure your Torbox API key.
-
 ## Configuration
 
-Configure DebridNZBd through the web interface or directly via the SABnzbd API:
+Open http://127.0.0.1:8080 in your browser and configure your Torbox API key.
+
+All settings can be managed through the web interface or via the SABnzbd API:
 
 1. **General** — Host, port, HTTPS, authentication
 2. **Folders** — Download directories, watched folder
@@ -52,7 +122,7 @@ Configure DebridNZBd through the web interface or directly via the SABnzbd API:
 In your *arr application:
 
 1. Settings → Download Clients → Add → SABnzbd
-2. Host: `127.0.0.1`
+2. Host: `127.0.0.1` (or your Docker host IP)
 3. Port: `8080`
 4. API Key: (shown in DebridNZBd General settings)
 
