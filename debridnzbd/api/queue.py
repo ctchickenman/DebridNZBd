@@ -42,6 +42,32 @@ VALID_TYPES = {"usenet", "torrent", "webdl"}
 BYTES_PER_MB = 1048576
 
 
+def detect_file_type(filename: str, default_type: str = "usenet") -> str:
+    """Detect the download type from the uploaded filename extension.
+
+    Classification rules (in order of precedence):
+    1. ``.torrent`` extension → "torrent"
+    2. ``.nzb`` extension → "usenet"
+    3. Unknown extension → the configured default type
+
+    Args:
+        filename: The uploaded file's original name.
+        default_type: Fallback type when the extension doesn't match known
+            patterns. Should be one of "usenet", "torrent", or "webdl".
+
+    Returns:
+        One of "usenet", "torrent", or "webdl".
+    """
+    name_lower = filename.lower()
+    if name_lower.endswith(".torrent"):
+        return "torrent"
+    if name_lower.endswith(".nzb"):
+        return "usenet"
+    if default_type not in VALID_TYPES:
+        default_type = "usenet"
+    return default_type
+
+
 def detect_url_type(url: str, default_type: str = "usenet") -> str:
     """Detect the download type from the URL pattern.
 
@@ -523,9 +549,302 @@ async def handle_addurl(params: dict) -> JSONResponse:
     return JSONResponse(content={"status": True, "nzo_ids": [nzo_id]})
 
 
-# ------------------------------------------------------------------ #
-#  Queue listing                                                       #
-# ------------------------------------------------------------------ #
+async def handle_addfile(params: dict) -> JSONResponse:
+    """Handle ?mode=addfile — upload a torrent or NZB file to Torbox.
+
+    Accepts a ``.torrent`` or ``.nzb`` file upload and submits it to the
+    appropriate Torbox API endpoint. Creates a local job entry in the
+    database for tracking.
+
+    SABnzbd-compatible parameters:
+        nzbfile: The uploaded file (passed via _upload_file_data /
+            _upload_file_name keys set by the router)
+        cat / category: Download category (default: "*")
+        priority: Priority (-100=paused, 0=normal, 1=low, 2=high)
+        nzbname: Custom display name for the job
+        pp: Post-processing option (-1=default, 0=none, 1=repair,
+            2=unpack, 3=unpack+delete)
+
+    Returns:
+        JSONResponse with SABnzbd-compatible format:
+        Success: {"status": true, "nzo_ids": ["SABnzbd_nzo_..."]}
+        Failure: {"status": false, "error": "error message"}
+    """
+    request = params.get("request")
+
+    # --- Extract file data from params (set by router from multipart upload) ---
+    file_data: bytes | None = params.get("_upload_file_data")
+    file_name: str = params.get("_upload_file_name", "")
+
+    if not file_data:
+        return JSONResponse(
+            status_code=400,
+            content={"status": False, "error": "No file uploaded"},
+        )
+
+    # --- Get config and database from app state ---
+    config = getattr(request.app.state, "config", None) if request else None
+    db = getattr(request.app.state, "db", None) if request else None
+
+    if config is None:
+        return JSONResponse(
+            status_code=500,
+            content={"status": False, "error": "Server not initialized"},
+        )
+
+    # --- Read Torbox configuration ---
+    torbox_api_key = await config.get("torbox", "api_key")
+    if not torbox_api_key:
+        return JSONResponse(
+            status_code=500,
+            content={"status": False, "error": "Torbox API key not configured. Set it in Config → Torbox."},
+        )
+
+    base_url = await config.get("torbox", "base_url", "https://api.torbox.app/v1")
+    default_type = await config.get("torbox", "default_type", "usenet")
+    post_processing = int(params.get("pp") or -1)
+
+    # --- Detect file type from extension ---
+    url_type = detect_file_type(file_name, default_type)
+    nzo_id = generate_nzo_id()
+
+    # Derive display name: prefer nzbname param, then strip extension from filename
+    nzbname_param = params.get("nzbname")
+    if nzbname_param and nzbname_param.strip():
+        filename = nzbname_param.strip()
+    else:
+        # Strip extension from uploaded filename for a cleaner display name
+        base = file_name.rsplit(".", 1)[0] if "." in file_name else file_name
+        filename = base or "file_upload"
+
+    logger.info("addfile: nzo_id=%s type=%s filename=%s size=%d", nzo_id, url_type, file_name, len(file_data))
+
+    # --- Submit to Torbox ---
+    client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+    torbox_id = None
+    torbox_hash = ""
+
+    try:
+        if url_type == "torrent":
+            result = await client.create_torrent(
+                file_data=file_data,
+                file_name=file_name or "upload.torrent",
+            )
+        elif url_type == "usenet":
+            result = await client.create_usenet_download(
+                file_data=file_data,
+                file_name=file_name or "upload.nzb",
+                post_processing=post_processing,
+            )
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"status": False, "error": f"Unsupported file type for addfile: {url_type}"},
+            )
+
+        if not result.success:
+            error_msg = result.detail or "Unknown error from Torbox"
+            logger.warning("addfile: Torbox rejected nzo_id=%s: %s", nzo_id, error_msg)
+            return JSONResponse(
+                status_code=502,
+                content={"status": False, "error": f"Torbox error: {error_msg}"},
+            )
+
+        # Extract Torbox download ID from response data (same logic as addurl)
+        data = result.data
+        logger.info(
+            "addfile: Torbox create response for nzo_id=%s type=%s: "
+            "data_type=%s data=%s detail=%s",
+            nzo_id, url_type, type(data).__name__,
+            repr(data)[:300] if data is not None else "None",
+            result.detail[:200] if result.detail else "",
+        )
+
+        if isinstance(data, int) and not isinstance(data, bool):
+            torbox_id = data
+        elif isinstance(data, str) and data.strip().isdigit():
+            torbox_id = int(data.strip())
+        elif isinstance(data, dict):
+            raw_id = (
+                data.get("usenet_id")
+                or data.get("torrent_id")
+                or data.get("web_id")
+                or data.get("id")
+            )
+            if raw_id is not None:
+                try:
+                    torbox_id = int(raw_id) if isinstance(raw_id, str) else int(raw_id)
+                except (ValueError, TypeError):
+                    logger.warning("addfile: could not parse torbox_id from %r", raw_id)
+            torbox_hash = data.get("hash", "")
+        elif isinstance(data, list) and data:
+            first = data[0] if isinstance(data[0], dict) else {}
+            raw_id = (
+                first.get("usenet_id")
+                or first.get("torrent_id")
+                or first.get("web_id")
+                or first.get("id")
+            )
+            if raw_id is not None:
+                try:
+                    torbox_id = int(raw_id) if isinstance(raw_id, str) else int(raw_id)
+                except (ValueError, TypeError):
+                    pass
+            torbox_hash = first.get("hash", "")
+
+    except TorboxAuthError:
+        logger.warning("addfile: Torbox auth failed for nzo_id=%s", nzo_id)
+        return JSONResponse(
+            status_code=502,
+            content={"status": False, "error": "Torbox authentication failed — check your API key"},
+        )
+    except TorboxConnectionError:
+        logger.warning("addfile: Cannot reach Torbox for nzo_id=%s", nzo_id)
+        return JSONResponse(
+            status_code=502,
+            content={"status": False, "error": "Cannot connect to Torbox API"},
+        )
+    except TorboxRateLimitError:
+        logger.warning("addfile: Torbox rate limited for nzo_id=%s", nzo_id)
+        return JSONResponse(
+            status_code=429,
+            content={"status": False, "error": "Torbox rate limit exceeded, please retry later"},
+        )
+    except TorboxError as e:
+        logger.error("addfile: Torbox error for nzo_id=%s: %s", nzo_id, e)
+        return JSONResponse(
+            status_code=502,
+            content={"status": False, "error": f"Torbox error: {e}"},
+        )
+    except Exception as e:
+        logger.exception("addfile: Unexpected error for nzo_id=%s", nzo_id)
+        return JSONResponse(
+            status_code=500,
+            content={"status": False, "error": "Internal server error"},
+        )
+    finally:
+        await client.close()
+
+    # --- Fallback: query mylist to find torbox_id ---
+    if torbox_id is None:
+        logger.info(
+            "addfile: no torbox_id from creation response for nzo_id=%s type=%s, "
+            "querying mylist to find it",
+            nzo_id, url_type,
+        )
+        try:
+            fallback_client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+            try:
+                existing_ids: set[str] = set()
+                if db and db.conn:
+                    cursor = await db.conn.execute(
+                        "SELECT torbox_id FROM jobs WHERE torbox_id IS NOT NULL AND torbox_id != ''"
+                    )
+                    for row in await cursor.fetchall():
+                        existing_ids.add(str(row[0]))
+
+                if url_type == "usenet":
+                    recent_list = await fallback_client.get_usenet_list(bypass_cache=True)
+                elif url_type == "torrent":
+                    recent_list = await fallback_client.get_torrent_list(bypass_cache=True)
+                else:
+                    recent_list = await fallback_client.get_web_download_list(bypass_cache=True)
+
+                if recent_list:
+                    for dl in sorted(recent_list, key=lambda d: d.id, reverse=True):
+                        if str(dl.id) in existing_ids:
+                            continue
+                        torbox_id = dl.id
+                        if hasattr(dl, "hash") and dl.hash:
+                            torbox_hash = dl.hash
+                        logger.info(
+                            "addfile: matched torbox_id=%s from mylist for nzo_id=%s type=%s",
+                            torbox_id, nzo_id, url_type,
+                        )
+                        break
+                    else:
+                        logger.warning(
+                            "addfile: all downloads in mylist already claimed for nzo_id=%s type=%s",
+                            nzo_id, url_type,
+                        )
+                else:
+                    logger.warning(
+                        "addfile: mylist returned empty for nzo_id=%s type=%s",
+                        nzo_id, url_type,
+                    )
+            finally:
+                await fallback_client.close()
+        except Exception:
+            logger.warning(
+                "addfile: failed to query mylist fallback for nzo_id=%s",
+                nzo_id, exc_info=True,
+            )
+
+    # --- Resolve the display name from Torbox ---
+    if not nzbname_param and torbox_id:
+        real_name = await _fetch_download_name(
+            torbox_api_key, base_url, torbox_id, url_type,
+        )
+        if real_name:
+            filename = real_name
+            logger.info(
+                "addfile: using Torbox name %r instead of file-derived name for nzo_id=%s",
+                real_name, nzo_id,
+            )
+
+    # --- Insert job into database ---
+    if db and db.conn:
+        category = params.get("cat") or params.get("category") or "*"
+        priority = int(params.get("priority") or 0)
+        script = params.get("script") or "Default"
+        password = params.get("password") or ""
+        now = time.time()
+
+        # Calculate next position in queue
+        try:
+            cursor = await db.conn.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM jobs")
+            row = await cursor.fetchone()
+            position = row[0] if row else 0
+        except Exception:
+            position = 0
+
+        try:
+            await db.conn.execute(
+                """INSERT INTO jobs (
+                    nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                    status, size, sizeleft, percentage, time_added, avg_age,
+                    torbox_id, torbox_type, torbox_hash, position, torbox_state
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    nzo_id,
+                    filename,
+                    password,
+                    "",  # no URL for file uploads
+                    category,
+                    script,
+                    priority,
+                    post_processing,
+                    "Queued",
+                    0,  # size — unknown until Torbox reports
+                    0,  # sizeleft
+                    0,  # percentage
+                    now,
+                    "",  # avg_age
+                    str(torbox_id) if torbox_id else None,
+                    url_type,
+                    torbox_hash,
+                    position,
+                    "queued",  # torbox_state
+                ),
+            )
+            await db.conn.commit()
+            logger.info("addfile: created job nzo_id=%s type=%s torbox_id=%s", nzo_id, url_type, torbox_id)
+        except Exception:
+            logger.exception("addfile: failed to insert job nzo_id=%s into database", nzo_id)
+    else:
+        logger.warning("addfile: database not available, job nzo_id=%s not persisted", nzo_id)
+
+    return JSONResponse(content={"status": True, "nzo_ids": [nzo_id]})
 
 
 async def handle_queue(params: dict) -> JSONResponse:

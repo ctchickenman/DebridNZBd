@@ -363,6 +363,7 @@ body {
 .form-group input[type="number"],
 .form-group input[type="url"],
 .form-group input[type="email"],
+.form-group input[type="file"],
 .form-group select,
 .form-group textarea {
   width: 100%;
@@ -406,6 +407,37 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 16px;
+}
+
+/* Tab Bar for Add Download section */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  padding: 8px 20px;
+  background: var(--bg-dark);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text-light);
+  background: var(--bg-hover);
+}
+
+.tab-btn.active {
+  background: var(--bg-card);
+  color: var(--primary);
+  border-bottom-color: var(--bg-card);
 }
 
 .advanced-toggle {

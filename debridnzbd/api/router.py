@@ -23,9 +23,11 @@ import logging
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
+from starlette.datastructures import UploadFile
 
 from debridnzbd.api.queue import (
     handle_addurl,
+    handle_addfile,
     handle_queue,
     handle_pause,
     handle_resume,
@@ -158,9 +160,23 @@ async def api_handler(
         form = getattr(request.state, "_form_data", None)
         if form is not None:
             for key, value in form.multi_items():
+                # Skip file uploads — they are extracted separately below
+                if isinstance(value, UploadFile):
+                    continue
                 str_value = value if isinstance(value, str) else str(value)
                 if key not in params or params[key] is None:
                     params[key] = str_value
+
+            # Extract uploaded file data from multipart form.
+            # SABnzbd uses "nzbfile" as the file parameter name, but we also
+            # accept any file upload for robustness.
+            for key, value in form.multi_items():
+                if isinstance(value, UploadFile):
+                    file_content = await value.read()
+                    await value.close()
+                    params["_upload_file_data"] = file_content
+                    params["_upload_file_name"] = value.filename or "upload"
+                    break  # Only one file upload per request
 
     try:
         return await handler(params)
@@ -205,6 +221,7 @@ MODE_HANDLERS: dict[str, callable] = {
     "auth": handle_auth,
     # Queue modes
     "addurl": handle_addurl,
+    "addfile": handle_addfile,
     "queue": handle_queue,
     "pause": handle_pause,
     "resume": handle_resume,

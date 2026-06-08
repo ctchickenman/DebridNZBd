@@ -177,9 +177,16 @@
 
 <!-- Add NZB Section -->
 <div class="card">
-  <div class="card-header">Add NZB</div>
+  <div class="card-header">Add Download</div>
   <div class="card-body">
+    <div class="tab-bar">
+      <button type="button" class="tab-btn active" onclick="switchAddTab('url')" id="tab-url">URL</button>
+      <button type="button" class="tab-btn" onclick="switchAddTab('file')" id="tab-file">File Upload</button>
+    </div>
     <div id="add-url-message" style="display:none; margin-bottom:12px;"></div>
+    <div id="add-file-message" style="display:none; margin-bottom:12px;"></div>
+
+    <!-- URL Tab -->
     <form id="add-url-form">
       <input type="hidden" name="apikey" value="{{ api_key }}">
       <input type="hidden" name="mode" value="addurl">
@@ -219,6 +226,47 @@
         <button type="submit" class="btn btn-primary" id="add-url-btn">Add URL</button>
       </div>
     </form>
+
+    <!-- File Upload Tab -->
+    <form id="add-file-form" enctype="multipart/form-data" style="display:none;">
+      <input type="hidden" name="apikey" value="{{ api_key }}">
+      <input type="hidden" name="mode" value="addfile">
+      <div class="form-row">
+        <div class="form-group">
+          <label>File</label>
+          <input type="file" name="nzbfile" id="add-file-input" accept=".torrent,.nzb" required>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select name="cat">
+            <option value="*">Default</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priority</label>
+          <select name="priority">
+            <option value="0">Default</option>
+            <option value="-100">Paused</option>
+            <option value="1">Low</option>
+            <option value="0">Normal</option>
+            <option value="1">High</option>
+            <option value="2">Force</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Name (optional)</label>
+          <input type="text" name="nzbname" placeholder="Custom download name">
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="submit" class="btn btn-primary" id="add-file-btn">Upload File</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -250,6 +298,16 @@
   };
 
   // --- Add URL form: submit via AJAX instead of direct POST ---
+  window.switchAddTab = function(tab) {
+    document.getElementById('add-url-form').style.display = tab === 'url' ? '' : 'none';
+    document.getElementById('add-file-form').style.display = tab === 'file' ? '' : 'none';
+    document.getElementById('tab-url').classList.toggle('active', tab === 'url');
+    document.getElementById('tab-file').classList.toggle('active', tab === 'file');
+    // Hide any messages when switching tabs
+    document.getElementById('add-url-message').style.display = 'none';
+    document.getElementById('add-file-message').style.display = 'none';
+  };
+
   var form = document.getElementById('add-url-form');
   var msgDiv = document.getElementById('add-url-message');
   var btn = document.getElementById('add-url-btn');
@@ -291,6 +349,50 @@
         msgDiv.textContent = 'Network error: ' + err.message;
         btn.disabled = false;
         btn.textContent = 'Add URL';
+      });
+    });
+  }
+
+  // --- Add File form: submit via AJAX ---
+  var fileForm = document.getElementById('add-file-form');
+  var fileMsgDiv = document.getElementById('add-file-message');
+  var fileBtn = document.getElementById('add-file-btn');
+
+  if (fileForm) {
+    fileForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      // Clear previous messages
+      fileMsgDiv.style.display = 'none';
+      fileMsgDiv.className = '';
+      fileMsgDiv.textContent = '';
+
+      // Disable button while submitting
+      fileBtn.disabled = true;
+      fileBtn.textContent = 'Uploading...';
+
+      var formData = new FormData(fileForm);
+      fetch('/api?mode=addfile', {
+        method: 'POST',
+        body: formData
+      })
+      .then(function(resp) { return resp.json(); })
+      .then(function(data) {
+        if (data.status === true) {
+          window.location.reload();
+        } else {
+          fileMsgDiv.style.display = 'block';
+          fileMsgDiv.className = 'alert alert-warning';
+          fileMsgDiv.textContent = data.error || 'Unknown error';
+          fileBtn.disabled = false;
+          fileBtn.textContent = 'Upload File';
+        }
+      })
+      .catch(function(err) {
+        fileMsgDiv.style.display = 'block';
+        fileMsgDiv.className = 'alert alert-warning';
+        fileMsgDiv.textContent = 'Network error: ' + err.message;
+        fileBtn.disabled = false;
+        fileBtn.textContent = 'Upload File';
       });
     });
   }
