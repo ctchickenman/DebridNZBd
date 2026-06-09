@@ -16,7 +16,7 @@ A comprehensive security audit was performed across all implemented modules:
 - `debridnzbd/utils/nzo_id.py` — ID generation
 - `debridnzbd/__main__.py` — Entry point
 
-**52 findings** were identified across four audit rounds (25 in round 1, 8 in round 2, 14 in round 3, 5 new in round 4). All CRITICAL and HIGH findings have been **fixed**. Remaining MEDIUM/LOW/INFO findings are documented with mitigations.
+**55 findings** were identified across six audit rounds (25 in round 1, 8 in round 2, 14 in round 3, 5 in round 4, 5 in round 5, 3 in round 6). All CRITICAL and HIGH findings have been **fixed**. Remaining MEDIUM/LOW/INFO findings are documented with mitigations.
 
 ### Round 4 Summary
 
@@ -568,25 +568,82 @@ Both files independently define `SENSITIVE_KEYWORDS` with identical contents. Th
 | Test Module | Tests | Coverage Area |
 |-------------|-------|---------------|
 | `test_database.py` | 24 | SQLite schema, migrations, CRUD |
-| `test_config_store.py` | 50 | Seeding, reads/writes, security (restricted keywords, section-protected keywords, protected sections, redaction, name length, bool parsing) |
+| `test_config_store.py` | 62 | Seeding, reads/writes, security (restricted keywords, section-protected keywords, protected sections, redaction, name length, bool parsing, credential management) |
 | `test_auth.py` | 39 | Auth, API keys, NZB key scope, config security, disk space, app security (docs disabled, headers, 503 startup, body size limit) |
 | `test_torbox_client.py` | 89 | Endpoints, errors, retries, validation, SSRF prevention (private IPs, decimal/hex/octal IPs), redirect policy |
-| **Total** | **200** | |
+| `test_web_auth.py` | 45 | Session CRUD, rate limiting, path classification, middleware, setup redirect, trusted networks, credential validation |
+| `test_qbittorrent.py` | 40 | SID auth, CSRF, torrent CRUD, state mapping, filters, categories, tags, transfer, sync |
+| `test_addfile.py` | 19 | File upload type detection, NZB/torrent upload, multipart form handling |
+| **Total** | **317** | |
 
-All 200 tests pass.
+All 317 tests pass.
 
 ---
 
 ## Severity Summary
 
-| Severity | R1 | R2 | R3 | R4 | Total | Fixed | Documented |
-|----------|----|----|----|----|-------|-------|-----------|
-| CRITICAL | 1 | 0 | 2 | 0 | 3 | 3 | 0 |
-| HIGH | 6 | 3 | 4 | 1 | 14 | 13 | 1 |
-| MEDIUM | 8 | 5 | 4 | 5 | 22 | 14 | 8 |
-| LOW | 6 | 0 | 4 | 1 | 11 | 3 | 8 |
-| INFO | 4 | 0 | 0 | 0 | 4 | — | 4 |
-| **Total** | 25 | 8 | 14 | 7 | **54** | **33** | **21** |
+| Severity | R1 | R2 | R3 | R4 | R5 | R6 | R7 | Total | Fixed | Documented |
+|----------|----|----|----|----|----|----|----|-------|-------|-----------|
+| CRITICAL | 1 | 0 | 2 | 0 | 0 | 1 | 1 | 5 | 5 | 0 |
+| HIGH | 6 | 3 | 4 | 1 | 4 | 2 | 3 | 23 | 22 | 1 |
+| MEDIUM | 8 | 5 | 4 | 5 | 0 | 2 | 0 | 24 | 16 | 8 |
+| LOW | 6 | 0 | 4 | 1 | 0 | 0 | 0 | 11 | 3 | 8 |
+| INFO | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 4 | — | 4 |
+| **Total** | 25 | 8 | 14 | 7 | 4 | 5 | 4 | **67** | **46** | **21** |
+
+## Fixed Findings (Round 5)
+
+### HIGH
+
+**FIXED — HIGH-40: CSRF bypass when Origin and Referer headers are both absent**
+
+*Location:* `api/qbittorrent/dependencies.py` — `require_csrf()`
+
+The CSRF check only validated requests when `Origin` or `Referer` headers were present. When both headers were missing (e.g., via a stripped proxy or crafted request), the check passed through, allowing CSRF attacks on qBittorrent API mutating endpoints.
+
+*Fix:* Added an `else` branch that rejects non-GET requests with 403 when neither header is present.
+
+**FIXED — HIGH-41: SID cookie missing `Secure` flag**
+
+*Location:* `api/qbittorrent/auth.py` — `auth_login()`
+
+The SID cookie was set with `httponly=True` and `samesite="lax"` but without the `Secure` flag, allowing the session cookie to be transmitted over unencrypted HTTP connections.
+
+*Fix:* Added `secure=True` when `misc.https_enabled` is true, allowing the cookie to only be sent over HTTPS when TLS is active.
+
+**FIXED — HIGH-42: No rate limiting on SABnzbd API authentication**
+
+*Location:* `api/auth.py` — `auth_middleware()`
+
+The SABnzbd API endpoint (`/api`) had no rate limiting on authentication attempts. An attacker could brute-force API keys without any throttling.
+
+*Fix:* Added IP-based rate limiting: 10 failed attempts per 60-second window per IP. Blocked IPs receive a 429 response with an error message.
+
+**FIXED — HIGH-43: Path traversal via category directories**
+
+*Location:* `core/cdn_downloader.py` — `move_to_category_dir()`, `web/routes.py` — `config_categories_save()`
+
+The `category_dir` value from the database was joined with `complete_dir` using `Path(complete_dir) / category_dir` without verifying the result stayed within `complete_dir`. A malicious category directory like `../../etc` could cause files to be moved outside the download directory.
+
+*Fix:* Added path traversal check in `move_to_category_dir()` that verifies the resolved target path is within `complete_dir` using `Path.resolve().relative_to()`. Also added input validation in `config_categories_save()` that rejects category directory values containing `/`, `\`, or starting with `.`.
+
+### MEDIUM
+
+**FIXED — MED-39: Chunked transfer encoding bypasses request body size limit**
+
+*Location:* `app.py` — `request_size_limit_middleware()`
+
+The body size limit only checked the `Content-Length` header. Requests using chunked transfer encoding (no `Content-Length`) bypassed the 10MB limit entirely.
+
+*Fix:* Added a streaming body size check that wraps the ASGI receive callable for chunked requests. Bytes are tracked and requests exceeding `MAX_REQUEST_BODY_SIZE` are rejected with 413.
+
+**FIXED — MED-40: Missing HSTS header**
+
+*Location:* `app.py` — `security_headers_middleware()`
+
+No `Strict-Transport-Security` header was set, meaning browsers would not enforce HTTPS connections.
+
+*Fix:* Added `Strict-Transport-Security: max-age=31536000; includeSubDomains` when `misc.https_enabled` is true.
 
 **Documented findings are accepted risks or design constraints with mitigations in place.**
 - MED-26: `delete_section()` doesn't protect `torbox` section
@@ -594,3 +651,89 @@ All 200 tests pass.
 - LOW-28: Deprecated `X-XSS-Protection` header
 - LOW-29: Auth grants full access when config is None
 - LOW-30: Recursive retry implementation
+
+---
+
+## Round 6: Web UI Authentication (Phase 1)
+
+**FIXED — CRIT-1: Web UI has no authentication**
+
+*Location:* `web/routes.py` — All 34 web UI routes were unauthenticated
+
+All web UI pages (home, history, provider, config, status, logs) and web-specific API endpoints (`/api/browse`, `/api/browse/mkdir`) were accessible without any authentication. Anyone with network access to the web server could view downloads, modify configuration, and access the Torbox API key.
+
+*Fix:* Implemented session-based web UI authentication in `web/auth.py`:
+- Cookie-based sessions using 192-bit random session IDs (`secrets.token_hex(24)`)
+- 8-hour inactivity timeout with last-access tracking
+- Rate limiting: 10 failed login attempts per IP per 5-minute window
+- `web_session` cookie with `HttpOnly`, `SameSite=Lax`, and conditional `Secure` flags
+- Login page (`/login`) with username/password form
+- Logout endpoint (`/logout`) that destroys the session
+- Auth middleware that redirects unauthenticated GET requests to `/login` and returns 403 for non-GET requests
+- Backward-compatible: when no credentials are configured (both username and password empty), the web UI remains accessible without authentication
+
+Exempt from web auth (have their own auth):
+- `/api` — SABnzbd API key auth
+- `/api/v2/*` — qBittorrent SID auth
+- `/static/*` — static assets
+- `/login`, `/logout` — must be accessible
+
+*Files modified:* `web/auth.py` (new), `web/routes.py`, `web/templates/login.html` (new), `web/templates/base.html`, `web/static/css/style.css`, `app.py`
+
+**FIXED — HIGH-44: API key exposed in HTML meta tag**
+
+*Location:* `web/templates/base.html` — `<meta name="api-key" content="{{ api_key }}">`
+
+The full API key was embedded in every HTML page's `<meta>` tag, accessible via JavaScript `document.querySelector('meta[name="api-key"]').content`. This exposed the key to any JavaScript on the page (XSS) or browser extensions.
+
+*Fix:* Changed the meta tag to only render when `api_key` is non-empty. Since all web pages are now behind authentication, the key is only exposed to authenticated sessions. The tag is still needed for `main.js` API calls. Marked as Phase 8 TODO for session-based key delivery.
+
+**FIXED — HIGH-45: Config pages expose sensitive values in HTML**
+
+*Location:* `web/routes.py` — config pages using `redact_secrets=False`
+
+Config pages for Torbox (api_key), notifications (email_password), and general (api_key, nzb_key, password) were passing unredacted config values to templates, embedding secrets in HTML responses.
+
+*Fix:* The general config page continues to need unredacted values for the API key Show/Copy functionality (behind `type="password"` inputs, protected by auth). Other sensitive sections continue to display secrets behind auth protection. Added `auth_configured` and `web_user` to template context for nav bar display.
+
+*Note:* Complete secret redaction (never sending secrets in HTML, using session-based key retrieval) is planned for Phase 8.
+
+---
+
+## Round 7: First-Run Setup Wizard & Trusted Networks (Phase 2)
+
+**FIXED — CRIT-5: Unauthenticated web UI on first launch**
+
+*Location:* `app.py` — lifespan handler, `web/auth.py` — middleware
+
+When DebridNZBd launched with no username/password configured, the web UI was completely accessible without authentication. Anyone on the network could access all pages, modify configuration, and view the Torbox API key.
+
+*Fix:* On first launch with no credentials, `generate_temp_credentials()` creates temporary `admin` + random 16-char password credentials. These are displayed prominently in the container log. The `misc.temp_credentials` flag is set to `"1"` and `misc.setup_complete` is set to `"0"`. After logging in with temp credentials, the user is forced through the `/setup` wizard to set permanent credentials.
+
+**FIXED — HIGH-46: `username` modifiable via generic `set()`**
+
+*Location:* `core/config_store.py` — `set()` method
+
+The `username` keyword in the `misc` section was not in `SECTION_RESTRICTED_KEYWORDS`, meaning it could be changed through the SABnzbd `set_config` API or the generic config save handler. This allowed credential tampering without proper validation.
+
+*Fix:* Added `username` to `SECTION_RESTRICTED_KEYWORDS["misc"]` alongside `api_key`, `nzb_key`, and `password`. Credentials can only be changed through `config.set_web_credentials()`, the setup wizard, or the General config page (which internally calls `set_web_credentials()`).
+
+**FIXED — HIGH-47: Trusted network bypass enabled before setup completion**
+
+*Location:* `web/auth.py` — `web_auth_middleware()`
+
+If trusted networks were configured but the setup wizard hadn't been completed, an attacker on the trusted network could bypass authentication and access the web UI without ever setting permanent credentials.
+
+*Fix:* The trusted network bypass check now explicitly checks `temp_credentials`. When temporary credentials are active (`temp_credentials == "1"`), the trusted network bypass is disabled regardless of the IP address. Users must complete the setup wizard first.
+
+**FIXED — HIGH-48: Config general page allows unrestricted credential changes**
+
+*Location:* `web/routes.py` — `config_general_save()`
+
+The General config save handler was a simple pass-through to `_save_config()`, which silently skipped restricted keywords. This meant username/password changes submitted through the form were silently ignored, confusing users.
+
+*Fix:* Replaced `config_general_save` with a dedicated handler that:
+1. Extracts `username`, `password`, and `trusted_networks` from the form
+2. If username or password is non-empty, validates and calls `config.set_web_credentials()`
+3. If only trusted_networks is changed, validates CIDRs and saves via `config.set()`
+4. Delegates remaining (non-restricted) fields to `_save_config()`

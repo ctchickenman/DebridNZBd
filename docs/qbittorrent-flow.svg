@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 1050" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrowFilled" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#334155"/>
+    </marker>
+    <marker id="arrowOpen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polyline points="0 0, 10 3.5, 0 7" fill="none" stroke="#64748b" stroke-width="1.2"/>
+    </marker>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="820" height="1050" fill="#fafbfc" rx="8"/>
+
+  <!-- Title -->
+  <text x="410" y="28" text-anchor="middle" font-size="15" font-weight="700" fill="#1e293b">qBittorrent API Request Flow</text>
+
+  <!-- Participant headers -->
+  <rect x="20" y="44" width="160" height="32" rx="5" fill="#8b5cf6" filter="url(#shadow)"/>
+  <text x="100" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">Torrent Client</text>
+
+  <rect x="330" y="44" width="160" height="32" rx="5" fill="#22c55e" filter="url(#shadow)"/>
+  <text x="410" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">DebridNZBd</text>
+
+  <rect x="640" y="44" width="160" height="32" rx="5" fill="#f97316" filter="url(#shadow)"/>
+  <text x="720" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="600">Torbox API</text>
+
+  <!-- Lifelines -->
+  <line x1="100" y1="76" x2="100" y2="1030" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="410" y1="76" x2="410" y2="1030" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="720" y1="76" x2="720" y2="1030" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- 1. Login -->
+  <line x1="100" y1="100" x2="400" y2="100" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="94" text-anchor="middle" font-size="11" fill="#334155">POST /auth/login (user+pass)</text>
+
+  <!-- 2. SID cookie -->
+  <line x1="400" y1="120" x2="100" y2="120" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="114" text-anchor="middle" font-size="11" fill="#22c55e">Set-Cookie: SID=abc123</text>
+
+  <!-- Note box: Auth -->
+  <rect x="470" y="92" width="220" height="38" rx="4" fill="#fef9c3" stroke="#eab308" stroke-width="1"/>
+  <text x="580" y="108" text-anchor="middle" font-size="10" fill="#854d0e">SID stored in-memory session</text>
+  <text x="580" y="122" text-anchor="middle" font-size="10" fill="#854d0e">1-hour timeout, 5 fails/min rate limit</text>
+
+  <!-- 3. Add magnet -->
+  <line x1="100" y1="150" x2="400" y2="150" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="144" text-anchor="middle" font-size="11" fill="#334155">POST /torrents/add (magnet URL)</text>
+
+  <!-- 4. CSRF check -->
+  <rect x="440" y="160" width="180" height="24" rx="4" fill="#e0e7ff" stroke="#6366f1" stroke-width="1"/>
+  <text x="530" y="176" text-anchor="middle" font-size="10" fill="#3730a3">CSRF: Referer/Origin → Host</text>
+
+  <!-- 5. Validate SID -->
+  <rect x="440" y="190" width="180" height="24" rx="4" fill="#e0e7ff" stroke="#6366f1" stroke-width="1"/>
+  <text x="530" y="206" text-anchor="middle" font-size="10" fill="#3730a3">Validate SID cookie</text>
+
+  <!-- 6. Create torrent on Torbox -->
+  <line x1="410" y1="230" x2="710" y2="230" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="560" y="224" text-anchor="middle" font-size="11" fill="#334155">POST /torrents/createtorrent</text>
+
+  <!-- 7. Torbox response -->
+  <line x1="710" y1="250" x2="410" y2="250" stroke="#f97316" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="560" y="244" text-anchor="middle" font-size="11" fill="#f97316">200 {success, data: {id, hash}}</text>
+
+  <!-- 8. Insert job in DB -->
+  <rect x="350" y="268" width="120" height="28" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="410" y="286" text-anchor="middle" font-size="10" fill="#1e3a8a">Insert job in DB</text>
+
+  <!-- 9. Return Ok. -->
+  <line x1="400" y1="310" x2="100" y2="310" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="304" text-anchor="middle" font-size="11" fill="#22c55e">200 "Ok."</text>
+
+  <!-- Separator -->
+  <line x1="20" y1="335" x2="800" y2="335" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="6,4"/>
+  <text x="410" y="350" text-anchor="middle" font-size="12" font-weight="600" fill="#475569">State Synchronization (Background)</text>
+
+  <!-- 10. Poll Torbox -->
+  <line x1="410" y1="370" x2="710" y2="370" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="560" y="364" text-anchor="middle" font-size="11" fill="#334155">GET /torrents/mylist (every 5s)</text>
+
+  <!-- 11. Torbox returns status -->
+  <line x1="710" y1="390" x2="410" y2="390" stroke="#f97316" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="560" y="384" text-anchor="middle" font-size="11" fill="#f97316">200 [{id, status, progress, ...}]</text>
+
+  <!-- 12. Update DB -->
+  <rect x="350" y="408" width="120" height="28" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="410" y="426" text-anchor="middle" font-size="10" fill="#1e3a8a">Update job status</text>
+
+  <!-- Note: pause guard -->
+  <rect x="470" y="400" width="200" height="38" rx="4" fill="#fef9c3" stroke="#eab308" stroke-width="1"/>
+  <text x="570" y="416" text-anchor="middle" font-size="10" fill="#854d0e">Skip Paused jobs</text>
+  <text x="570" y="430" text-anchor="middle" font-size="10" fill="#854d0e">(local-only pause)</text>
+
+  <!-- Separator -->
+  <line x1="20" y1="455" x2="800" y2="455" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="6,4"/>
+  <text x="410" y="470" text-anchor="middle" font-size="12" font-weight="600" fill="#475569">Client Polling</text>
+
+  <!-- 13. sync/maindata -->
+  <line x1="100" y1="490" x2="400" y2="490" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="484" text-anchor="middle" font-size="11" fill="#334155">GET /sync/maindata</text>
+
+  <!-- 14. Query DB -->
+  <rect x="350" y="505" width="120" height="28" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="410" y="523" text-anchor="middle" font-size="10" fill="#1e3a8a">Query jobs table</text>
+
+  <!-- 15. Map state -->
+  <rect x="350" y="540" width="120" height="28" rx="4" fill="#dcfce7" stroke="#22c55e" stroke-width="1"/>
+  <text x="410" y="558" text-anchor="middle" font-size="10" fill="#14532d">Map DebridNZBd → qBit</text>
+
+  <!-- 16. Return snapshot -->
+  <line x1="400" y1="580" x2="100" y2="580" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="574" text-anchor="middle" font-size="11" fill="#22c55e">200 {torrents, categories, ...}</text>
+
+  <!-- State mapping box -->
+  <rect x="50" y="600" width="720" height="120" rx="6" fill="white" stroke="#94a3b8" stroke-width="1"/>
+  <text x="410" y="620" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">State Mapping: DebridNZBd → qBittorrent</text>
+
+  <text x="80" y="642" font-size="10" fill="#475569">Queued → <tspan fill="#3b82f6" font-weight="600">queuedDL</tspan></text>
+  <text x="280" y="642" font-size="10" fill="#475569">Downloading (speed&gt;0) → <tspan fill="#3b82f6" font-weight="600">downloading</tspan></text>
+  <text x="570" y="642" font-size="10" fill="#475569">Downloading (speed=0) → <tspan fill="#3b82f6" font-weight="600">stalledDL</tspan></text>
+
+  <text x="80" y="662" font-size="10" fill="#475569">Paused → <tspan fill="#3b82f6" font-weight="600">pausedDL</tspan></text>
+  <text x="280" y="662" font-size="10" fill="#475569">Fetching → <tspan fill="#3b82f6" font-weight="600">moving</tspan></text>
+  <text x="570" y="662" font-size="10" fill="#475569">Complete → <tspan fill="#3b82f6" font-weight="600">uploading</tspan></text>
+
+  <text x="80" y="682" font-size="10" fill="#475569">Failed → <tspan fill="#3b82f6" font-weight="600">error</tspan></text>
+  <text x="280" y="682" font-size="10" fill="#94a3b8" font-style="italic">Paused jobs are not overwritten by poller</text>
+
+  <!-- Separator -->
+  <line x1="20" y1="735" x2="800" y2="735" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="6,4"/>
+  <text x="410" y="750" text-anchor="middle" font-size="12" font-weight="600" fill="#475569">Pause / Resume (Local Only)</text>
+
+  <!-- 17. Pause torrent -->
+  <line x1="100" y1="770" x2="400" y2="770" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="764" text-anchor="middle" font-size="11" fill="#334155">POST /torrents/stop (hashes)</text>
+
+  <!-- 18. Update DB -->
+  <rect x="350" y="785" width="120" height="28" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="410" y="803" text-anchor="middle" font-size="10" fill="#1e3a8a">SET status='Paused'</text>
+
+  <!-- Note: no Torbox call -->
+  <rect x="470" y="780" width="200" height="38" rx="4" fill="#fef9c3" stroke="#eab308" stroke-width="1"/>
+  <text x="570" y="796" text-anchor="middle" font-size="10" fill="#854d0e">No Torbox API call</text>
+  <text x="570" y="810" text-anchor="middle" font-size="10" fill="#854d0e">Pause is local-only</text>
+
+  <!-- 19. Resume torrent -->
+  <line x1="100" y1="840" x2="400" y2="840" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="834" text-anchor="middle" font-size="11" fill="#334155">POST /torrents/start (hashes)</text>
+
+  <!-- 20. Update DB -->
+  <rect x="350" y="855" width="120" height="28" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="410" y="873" text-anchor="middle" font-size="10" fill="#1e3a8a">SET status='Queued'</text>
+
+  <!-- 21. Return Ok -->
+  <line x1="400" y1="900" x2="100" y2="900" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="894" text-anchor="middle" font-size="11" fill="#22c55e">200 "Ok."</text>
+
+  <!-- Separator -->
+  <line x1="20" y1="920" x2="800" y2="920" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="6,4"/>
+  <text x="410" y="935" text-anchor="middle" font-size="12" font-weight="600" fill="#475569">Delete (Local + Torbox)</text>
+
+  <!-- 22. Delete torrent -->
+  <line x1="100" y1="955" x2="400" y2="955" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="949" text-anchor="middle" font-size="11" fill="#334155">POST /torrents/delete (hashes)</text>
+
+  <!-- 23. Call Torbox control -->
+  <line x1="410" y1="975" x2="710" y2="975" stroke="#334155" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="560" y="969" text-anchor="middle" font-size="11" fill="#334155">POST /torrents/controltorrent (Delete)</text>
+
+  <!-- 24. Remove from DB -->
+  <rect x="350" y="990" width="120" height="28" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="410" y="1008" text-anchor="middle" font-size="10" fill="#1e3a8a">DELETE from jobs</text>
+
+  <!-- 25. Return Ok -->
+  <line x1="400" y1="1030" x2="100" y2="1030" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrowFilled)"/>
+  <text x="250" y="1024" text-anchor="middle" font-size="11" fill="#22c55e">200 "Ok."</text>
+
+  <!-- Participant footers -->
+  <rect x="20" y="1040" width="160" height="2" rx="1" fill="#8b5cf6"/>
+  <rect x="330" y="1040" width="160" height="2" rx="1" fill="#22c55e"/>
+  <rect x="640" y="1040" width="160" height="2" rx="1" fill="#f97316"/>
+</svg>

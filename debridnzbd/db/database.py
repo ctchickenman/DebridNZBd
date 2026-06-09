@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Current schema version — used to determine which migrations to run.
 # Increment this when adding new migrations.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class Database:
@@ -364,6 +364,32 @@ class Database:
             logger.info("Migration 002: Added nzo_url column to history table")
         else:
             logger.info("Migration 002: nzo_url column already exists, skipping")
+
+    async def _migration_003(self) -> None:
+        """Add tags column to jobs table and index on torbox_hash.
+
+        The tags column stores comma-separated tag strings for qBittorrent
+        API compatibility. The torbox_hash index enables fast lookups when
+        the qBittorrent API queries torrents by info hash.
+        """
+        # Check if tags column already exists (idempotent migration)
+        cursor = await self.conn.execute("PRAGMA table_info(jobs)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        if "tags" not in columns:
+            await self.conn.execute(
+                "ALTER TABLE jobs ADD COLUMN tags TEXT DEFAULT ''"
+            )
+            await self.conn.commit()
+            logger.info("Migration 003: Added tags column to jobs table")
+        else:
+            logger.info("Migration 003: tags column already exists, skipping")
+
+        # Add index on torbox_hash for fast hash-based lookups
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_torbox_hash ON jobs(torbox_hash)"
+        )
+        await self.conn.commit()
+        logger.info("Migration 003: Ensured idx_jobs_torbox_hash index exists")
 
 
 # ------------------------------------------------------------------ #

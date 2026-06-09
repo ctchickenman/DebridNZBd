@@ -456,6 +456,21 @@ async def move_to_category_dir(
     else:
         final_dir = Path(complete_dir)
 
+    # Path traversal check: ensure the resolved final directory is within
+    # the configured complete directory. A malicious category_dir like
+    # "../../etc" would escape the download directory.
+    try:
+        final_dir_resolved = final_dir.resolve()
+        complete_dir_resolved = Path(complete_dir).resolve()
+        final_dir_resolved.relative_to(complete_dir_resolved)
+    except ValueError:
+        logger.error(
+            "CDN download: category dir '%s' escapes complete_dir '%s'",
+            category_dir, complete_dir,
+        )
+        # Fall back to the default complete directory
+        final_dir = Path(complete_dir)
+
     # Create the target directory if it doesn't exist
     try:
         final_dir.mkdir(parents=True, exist_ok=True)

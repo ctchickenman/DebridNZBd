@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="api-key" content="{{ api_key }}">
+  {% if api_key %}<meta name="api-key" content="{{ api_key }}">{% endif %}
   <title>{% block title %}DebridNZBd{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml">
@@ -27,10 +27,19 @@
     {% else %}
     <button class="pause-btn" onclick="apiAction('pause', {}, function() { window.location.reload(); }, {successMsg: 'Queue paused'})">⏸ Pause</button>
     {% endif %}
+    {% if auth_configured and web_user %}
+    <span class="nav-user">{{ web_user }}</span>
+    <a href="/logout" class="nav-logout">Logout</a>
+    {% endif %}
   </div>
 </nav>
 
 <div class="container">
+{% if not setup_complete %}
+<div class="alert alert-danger" style="margin:0 0 16px 0;border-radius:var(--border-radius);text-align:center;">
+  Setup incomplete — <a href="/setup">complete the wizard</a> to secure your installation.
+</div>
+{% endif %}
 {% if flash_message %}
 <div class="alert alert-{{ flash_type }}">{{ flash_message }}</div>
 {% endif %}

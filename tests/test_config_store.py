@@ -455,3 +455,75 @@ class TestSecurityProtections:
         await store.set("torbox", "poll_interval", "10")
         result = await store.get("torbox", "poll_interval")
         assert result == "10"
+
+
+# ------------------------------------------------------------------ #
+#  Credential management tests (generate_temp_credentials,             #
+#  set_web_credentials)                                                #
+# ------------------------------------------------------------------ #
+
+
+class TestCredentialManagement:
+    """Tests for generate_temp_credentials() and set_web_credentials()."""
+
+    @pytest.mark.asyncio
+    async def test_set_rejects_username_in_misc(self, store: ConfigStore) -> None:
+        """set() must reject writing restricted keyword 'username' in misc."""
+        with pytest.raises(ValueError, match="restricted"):
+            await store.set("misc", "username", "admin")
+
+    @pytest.mark.asyncio
+    async def test_delete_rejects_restricted_username_in_misc(self, store: ConfigStore) -> None:
+        """delete() must reject deleting restricted keyword 'username' in misc."""
+        with pytest.raises(ValueError, match="protected"):
+            await store.delete("misc", "username")
+
+    @pytest.mark.asyncio
+    async def test_generate_temp_credentials(self, store: ConfigStore) -> None:
+        """generate_temp_credentials() should create admin + random password."""
+        username, password = await store.generate_temp_credentials()
+        assert username == "admin"
+        assert len(password) == 16  # secrets.token_hex(8)
+        assert await store.get("misc", "temp_credentials") == "1"
+        assert await store.get("misc", "setup_complete") == "0"
+
+    @pytest.mark.asyncio
+    async def test_set_web_credentials_validates_username_length(self, store: ConfigStore) -> None:
+        """set_web_credentials() should reject usernames shorter than 3 chars."""
+        with pytest.raises(ValueError, match="[Uu]sername"):
+            await store.set_web_credentials("ab", "password123")
+
+    @pytest.mark.asyncio
+    async def test_set_web_credentials_validates_password_length(self, store: ConfigStore) -> None:
+        """set_web_credentials() should reject passwords shorter than 6 chars."""
+        with pytest.raises(ValueError, match="[Pp]assword"):
+            await store.set_web_credentials("admin", "12345")
+
+    @pytest.mark.asyncio
+    async def test_set_web_credentials_validates_cidr(self, store: ConfigStore) -> None:
+        """set_web_credentials() should reject invalid CIDR ranges."""
+        with pytest.raises(ValueError, match="[Cc]IDR|[Tt]rusted|[Ii]nvalid"):
+            await store.set_web_credentials("admin", "password123", trusted_networks="not-a-cidr")
+
+    @pytest.mark.asyncio
+    async def test_set_web_credentials_stores_values(self, store: ConfigStore) -> None:
+        """set_web_credentials() should store credentials and clear temp flags."""
+        await store.set_web_credentials("myuser", "mypassword123", trusted_networks="10.0.0.0/8")
+        # Username and password should be stored (can't read via get() for restricted
+        # keys, but can verify via DB directly)
+        assert await store.get_bool("misc", "temp_credentials", True) is False
+        assert await store.get_bool("misc", "setup_complete", False) is True
+        assert await store.get("misc", "trusted_networks") == "10.0.0.0/8"
+
+    @pytest.mark.asyncio
+    async def test_set_web_credentials_clears_temp_flags(self, store: ConfigStore) -> None:
+        """set_web_credentials() should clear temp_credentials and set setup_complete."""
+        # First, generate temp credentials
+        await store.generate_temp_credentials()
+        assert await store.get_bool("misc", "temp_credentials", False) is True
+        assert await store.get_bool("misc", "setup_complete", True) is False
+
+        # Now set real credentials
+        await store.set_web_credentials("realuser", "realpassword123")
+        assert await store.get_bool("misc", "temp_credentials", True) is False
+        assert await store.get_bool("misc", "setup_complete", False) is True

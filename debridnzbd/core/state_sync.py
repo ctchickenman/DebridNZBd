@@ -329,8 +329,10 @@ async def _update_job_from_torbox(
     effective_status = "Fetching" if (is_completed and download_on_complete) else local_status
 
     for nzo_id, current_status in matching_jobs:
-        # Skip if job is already in a final state or being fetched from CDN
-        if current_status in ("Complete", "Failed", "Fetching"):
+        # Skip if job is already in a final state, being fetched from CDN,
+        # or locally paused (the qBittorrent API sets local Paused status
+        # that the poller should not overwrite with Torbox's reported status).
+        if current_status in ("Complete", "Failed", "Fetching", "Paused"):
             continue
 
         try:

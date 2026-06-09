@@ -3,9 +3,11 @@
 Creates and configures the FastAPI application with:
 - SQLite database initialization and migrations
 - Config store seeding with defaults
-- Auth middleware for API key validation
+- Auth middleware for API key validation (SABnzbd API)
+- Web UI session authentication
 - SABnzbd API router at /api
-- Web UI routes (to be added in Phase 7)
+- qBittorrent API router at /api/v2
+- Web UI routes
 - Static file serving for CSS/JS/images
 
 The lifespan handler starts and stops background services:
@@ -20,7 +22,7 @@ import logging.handlers
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +31,7 @@ from debridnzbd.api.router import router as api_router
 from debridnzbd.core.config_store import ConfigStore
 from debridnzbd.db.database import Database, init_database, close_database
 from debridnzbd.utils.diskspace import set_allowed_dirs
+from debridnzbd.web.auth import web_auth_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -203,10 +206,21 @@ async def lifespan(app: FastAPI):
 
     username = await config.get("misc", "username")
     password = await config.get("misc", "password")
+    temp_creds = await config.get_bool("misc", "temp_credentials", False)
+    setup_done = await config.get_bool("misc", "setup_complete", False)
+
     if not username and not password:
+        # First launch with no credentials — generate temporary ones
+        temp_user, temp_pass = await config.generate_temp_credentials()
+        logger.warning("=" * 60)
+        logger.warning("TEMPORARY CREDENTIALS GENERATED FOR FIRST LAUNCH")
+        logger.warning("Username: %s", temp_user)
+        logger.warning("Password: %s", temp_pass)
+        logger.warning("Log in to complete the setup wizard.")
+        logger.warning("=" * 60)
+    elif temp_creds and not setup_done:
         logger.warning(
-            "⚠️  No web UI username/password configured. "
-            "The web interface is accessible without authentication."
+            "⚠️  Temporary credentials active — log in to complete setup."
         )
 
     # --- Set restrictive permissions on database file ---
@@ -293,17 +307,13 @@ def create_app() -> FastAPI:
     )
 
     # Add request body size limiting middleware to prevent memory exhaustion.
-    # Rejects requests with Content-Length exceeding MAX_REQUEST_BODY_SIZE.
-    # NOTE: This only checks the Content-Length header. Requests using chunked
-    # transfer encoding (no Content-Length header) are not size-checked at this
-    # layer. For the SABnzbd API, the primary upload is NZB files which are
-    # typically small (<1MB). The Torbox client enforces a 50MB file size limit
-    # separately. A full request body size check would require wrapping the
-    # ASGI receive callable, which can be added if needed.
+    # Checks both Content-Length header and actual bytes received (for chunked
+    # transfer encoding). Rejects requests exceeding MAX_REQUEST_BODY_SIZE.
     @app.middleware("http")
     async def request_size_limit_middleware(request, call_next):
         # Only check body size for methods that send a body
         if request.method in ("POST", "PUT", "PATCH"):
+            # First, check Content-Length header (fast path)
             content_length = request.headers.get("content-length")
             if content_length is not None:
                 try:
@@ -313,7 +323,29 @@ def create_app() -> FastAPI:
                             content={"status": False, "error": "Request body too large"},
                         )
                 except (ValueError, TypeError):
-                    pass  # Invalid Content-Length, let Starlette handle it
+                    pass  # Invalid Content-Length, proceed to streaming check
+
+            # For chunked transfer encoding (no Content-Length), wrap the
+            # receive callable to track bytes and reject oversized bodies.
+            if content_length is None:
+                original_receive = request.receive
+                bytes_read = 0
+
+                async def size_limited_receive():
+                    nonlocal bytes_read
+                    message = await original_receive()
+                    if message.get("type") == "http.request.body":
+                        body = message.get("body", b"")
+                        bytes_read += len(body)
+                        if bytes_read > MAX_REQUEST_BODY_SIZE:
+                            raise HTTPException(
+                                status_code=413,
+                                detail="Request body too large",
+                            )
+                    return message
+
+                request._receive = size_limited_receive
+
         return await call_next(request)
 
     # Add auth middleware for /api endpoint authentication.
@@ -324,6 +356,15 @@ def create_app() -> FastAPI:
     # - Returns 503 during startup before config is initialized
     # - Logs security warnings for auth-disabled mode
     app.middleware("http")(auth_middleware)
+
+    # Add web UI session authentication middleware.
+    # Uses cookie-based sessions (web_auth_middleware from web/auth.py) which:
+    # - Redirects unauthenticated GET requests to /login
+    # - Returns 403 for unauthenticated non-GET requests
+    # - Skips auth for /api (has its own key auth), /api/v2/* (SID auth),
+    #   /static/* (public assets), and /login, /logout
+    # - Allows access without auth when no credentials are configured
+    app.middleware("http")(web_auth_middleware)
 
     # Add security headers middleware to all responses.
     # These headers protect against clickjacking, MIME-type sniffing,
@@ -337,6 +378,8 @@ def create_app() -> FastAPI:
         # Content-Security-Policy restricts script/style sources to same origin,
         # preventing inline script injection (XSS) and unauthorized resource loading.
         # 'unsafe-inline' for styles is needed for Pico CSS; unsafe-eval is not allowed.
+        # TODO(Phase 7): Remove 'unsafe-inline' from script-src once inline handlers
+        # are refactored to use data attributes + addEventListener.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
@@ -344,10 +387,23 @@ def create_app() -> FastAPI:
             "img-src 'self'; "
             "connect-src 'self'"
         )
+        # Add HSTS header when HTTPS is enabled
+        try:
+            config = request.app.state.config
+            if config and await config.get_bool("misc", "https_enabled", False):
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains"
+                )
+        except Exception:
+            pass  # Config not ready during startup
         return response
 
     # Include the SABnzbd API router
     app.include_router(api_router)
+
+    # Include the qBittorrent WebUI API router
+    from debridnzbd.api.qbittorrent import qbittorrent_router
+    app.include_router(qbittorrent_router)
 
     # Include web UI routes (root /, /history, /config, /status, etc.)
     # Must be included before the static mount so route matching works.

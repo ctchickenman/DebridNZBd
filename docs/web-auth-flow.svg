@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 680" font-family="sans-serif" font-size="12">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#343a40"/>
+    </marker>
+    <marker id="arr-g" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2b8a3e"/>
+    </marker>
+    <marker id="arr-r" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c92a2a"/>
+    </marker>
+  </defs>
+
+  <rect x="5" y="5" width="590" height="670" rx="10" fill="#f8f9fa" stroke="#adb5bd"/>
+  <text x="300" y="30" text-anchor="middle" font-size="16" font-weight="bold">Web UI Authentication Flow</text>
+
+  <!-- Start -->
+  <rect x="220" y="45" width="160" height="35" rx="17" fill="#4dabf7" stroke="#1971c2"/>
+  <text x="300" y="67" text-anchor="middle" fill="white" font-weight="bold">Request</text>
+
+  <!-- Exempt? -->
+  <polygon points="300,115 400,150 300,185 200,150" fill="#e9ecef" stroke="#868e96"/>
+  <text x="300" y="153" text-anchor="middle" font-weight="bold" font-size="11">Exempt path?</text>
+
+  <!-- Trusted net? -->
+  <polygon points="300,215 420,255 300,295 180,255" fill="#e9ecef" stroke="#868e96"/>
+  <text x="300" y="253" text-anchor="middle" font-weight="bold" font-size="10">Trusted network</text>
+  <text x="300" y="268" text-anchor="middle" font-weight="bold" font-size="10">&amp; !temp_creds?</text>
+
+  <!-- No creds? -->
+  <polygon points="300,325 420,365 300,405 180,365" fill="#e9ecef" stroke="#868e96"/>
+  <text x="300" y="360" text-anchor="middle" font-weight="bold" font-size="10">No username</text>
+  <text x="300" y="375" text-anchor="middle" font-weight="bold" font-size="10">&amp; password?</text>
+
+  <!-- Valid session? -->
+  <polygon points="300,435 420,475 300,515 180,475" fill="#e9ecef" stroke="#868e96"/>
+  <text x="300" y="478" text-anchor="middle" font-weight="bold" font-size="11">Valid session?</text>
+
+  <!-- Setup complete? -->
+  <polygon points="300,545 420,585 300,625 180,585" fill="#ffe066" stroke="#e67700"/>
+  <text x="300" y="583" text-anchor="middle" font-weight="bold" font-size="11">setup_complete?</text>
+
+  <!-- Outcomes -->
+  <rect x="480" y="90" width="100" height="30" rx="6" fill="#51cf66" stroke="#2b8a3e"/>
+  <text x="530" y="110" text-anchor="middle" font-weight="bold" font-size="10">Pass through</text>
+
+  <rect x="480" y="240" width="100" height="30" rx="6" fill="#51cf66" stroke="#2b8a3e"/>
+  <text x="530" y="260" text-anchor="middle" font-weight="bold" font-size="10">Allow (bypass)</text>
+
+  <rect x="480" y="350" width="100" height="30" rx="6" fill="#51cf66" stroke="#2b8a3e"/>
+  <text x="530" y="370" text-anchor="middle" font-weight="bold" font-size="10">Allow (no auth)</text>
+
+  <rect x="30" y="570" width="130" height="40" rx="6" fill="#ff8787" stroke="#c92a2a"/>
+  <text x="95" y="588" text-anchor="middle" font-weight="bold" font-size="10">GET → /login</text>
+  <text x="95" y="603" text-anchor="middle" font-size="9">POST → 403</text>
+
+  <rect x="480" y="570" width="100" height="40" rx="6" fill="#4dabf7" stroke="#1971c2"/>
+  <text x="530" y="588" text-anchor="middle" font-weight="bold" font-size="10">Redirect</text>
+  <text x="530" y="603" text-anchor="middle" font-size="9">→ /setup</text>
+
+  <rect x="480" y="635" width="100" height="30" rx="6" fill="#51cf66" stroke="#2b8a3e"/>
+  <text x="530" y="655" text-anchor="middle" font-weight="bold" font-size="10">Allow</text>
+
+  <!-- Arrows from start -->
+  <line x1="300" y1="80" x2="300" y2="115" stroke="#343a40" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Exempt? yes -->
+  <line x1="400" y1="150" x2="480" y2="105" stroke="#2b8a3e" stroke-width="1.5" marker-end="url(#arr-g)"/>
+  <text x="445" y="120" font-size="10" fill="#2b8a3e" font-weight="bold">Yes</text>
+
+  <!-- Exempt? no -->
+  <line x1="300" y1="185" x2="300" y2="215" stroke="#343a40" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="310" y="200" font-size="10" fill="#c92a2a" font-weight="bold">No</text>
+
+  <!-- Trusted? yes -->
+  <line x1="420" y1="255" x2="480" y2="255" stroke="#2b8a3e" stroke-width="1.5" marker-end="url(#arr-g)"/>
+  <text x="445" y="245" font-size="10" fill="#2b8a3e" font-weight="bold">Yes</text>
+
+  <!-- Trusted? no -->
+  <line x1="300" y1="295" x2="300" y2="325" stroke="#343a40" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="310" y="312" font-size="10" fill="#c92a2a" font-weight="bold">No</text>
+
+  <!-- No creds? yes -->
+  <line x1="420" y1="365" x2="480" y2="365" stroke="#2b8a3e" stroke-width="1.5" marker-end="url(#arr-g)"/>
+  <text x="445" y="355" font-size="10" fill="#2b8a3e" font-weight="bold">Yes</text>
+
+  <!-- No creds? no -->
+  <line x1="300" y1="405" x2="300" y2="435" stroke="#343a40" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="310" y="422" font-size="10" fill="#c92a2a" font-weight="bold">No</text>
+
+  <!-- Valid session? no -->
+  <line x1="180" y1="475" x2="95" y2="570" stroke="#c92a2a" stroke-width="1.5" marker-end="url(#arr-r)"/>
+  <text x="120" y="520" font-size="10" fill="#c92a2a" font-weight="bold">No</text>
+
+  <!-- Valid session? yes -->
+  <line x1="300" y1="515" x2="300" y2="545" stroke="#2b8a3e" stroke-width="2" marker-end="url(#arr-g)"/>
+  <text x="310" y="535" font-size="10" fill="#2b8a3e" font-weight="bold">Yes</text>
+
+  <!-- Setup complete? no (path != /setup) -->
+  <line x1="420" y1="585" x2="480" y2="590" stroke="#e67700" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="450" y="578" font-size="10" fill="#e67700" font-weight="bold">No</text>
+
+  <!-- Setup complete? yes -->
+  <line x1="300" y1="625" x2="300" y2="645" stroke="#2b8a3e" stroke-width="2"/>
+  <line x1="300" y1="645" x2="480" y2="650" stroke="#2b8a3e" stroke-width="2" marker-end="url(#arr-g)"/>
+  <text x="390" y="643" font-size="10" fill="#2b8a3e" font-weight="bold">Yes</text>
+</svg>

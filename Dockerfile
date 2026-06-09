@@ -46,7 +46,7 @@ FROM python:3.12-slim-bookworm
 LABEL org.opencontainers.image.title="DebridNZBd" \
       org.opencontainers.image.description="SABnzbd-compatible API server powered by Torbox" \
       org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.source="https://github.com/user/debridnzbd" \
+      org.opencontainers.image.source="https://github.com/ctchickenman/DebridNZBd" \
       org.opencontainers.image.licenses="MIT"
 
 # Create a non-root user for security.

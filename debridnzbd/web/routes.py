@@ -4,11 +4,13 @@ Provides the browser-accessible interface with pages for the download
 queue, history, configuration, and server status.
 
 The web UI uses Jinja2 templates with a custom dark theme. Authentication
-is separate from the API: the web UI will use username/password session
-auth, while the API uses API key auth.
+is separate from the API: the web UI uses username/password session auth
+(cookie-based, see web/auth.py), while the API uses API key auth and the
+qBittorrent API uses SID-based session auth.
 """
 
 import asyncio
+import hmac
 import logging
 import os
 import shutil
@@ -16,7 +18,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -32,6 +34,13 @@ from debridnzbd.torbox.exceptions import (
 )
 from debridnzbd.utils.version import VERSION
 from debridnzbd.utils.format import format_size, format_uptime, format_timestamp
+from debridnzbd.web.auth import (
+    create_web_session,
+    destroy_web_session,
+    validate_web_session,
+    _check_web_rate_limit,
+    _record_web_failure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +59,8 @@ async def _base_context(request: Request, **overrides) -> dict:
     """Build the common template context shared by all pages.
 
     Reads version, API key, speed, and paused state from app.state.config.
+    Also includes authentication state (web_user, auth_configured) for
+    the nav bar logout button.
     Additional keyword arguments override or extend the defaults.
     """
     config = getattr(request.app.state, "config", None)
@@ -62,6 +73,9 @@ async def _base_context(request: Request, **overrides) -> dict:
         "queue_paused": False,
         "flash_message": None,
         "flash_type": "info",
+        "web_user": None,
+        "auth_configured": False,
+        "setup_complete": True,
     }
 
     if config is not None:
@@ -69,6 +83,16 @@ async def _base_context(request: Request, **overrides) -> dict:
             ctx["api_key"] = await config.get("misc", "api_key")
         except Exception:
             pass
+
+    # Authentication state from web auth middleware
+    ctx["web_user"] = getattr(request.state, "web_user", None)
+
+    # Check if authentication is configured (username or password set)
+    if config is not None:
+        username = await config.get("misc", "username")
+        password = await config.get("misc", "password")
+        ctx["auth_configured"] = bool(username) or bool(password)
+        ctx["setup_complete"] = await config.get_bool("misc", "setup_complete", True)
 
     # Read flash messages from query params
     if request.query_params.get("saved"):
@@ -129,6 +153,233 @@ async def _save_config(request: Request, tab: str) -> RedirectResponse:
     if saved_any:
         return RedirectResponse(url=f"/config/{tab}?saved=1", status_code=303)
     return RedirectResponse(url=f"/config/{tab}", status_code=303)
+
+
+# ------------------------------------------------------------------ #
+#  Login / Logout                                                      #
+# ------------------------------------------------------------------ #
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request) -> HTMLResponse:
+    """Render the login page.
+
+    If no credentials are configured, redirects to the home page
+    (authentication is not required).
+    """
+    config = getattr(request.app.state, "config", None)
+    if config is not None:
+        username = await config.get("misc", "username")
+        password = await config.get("misc", "password")
+        # If no credentials are configured, skip login
+        if not username and not password:
+            return RedirectResponse(url="/", status_code=303)
+
+    # If already logged in, redirect to home
+    session_id = request.cookies.get("web_session")
+    if session_id:
+        session = await validate_web_session(session_id)
+        if session:
+            return RedirectResponse(url="/", status_code=303)
+
+    next_url = request.query_params.get("next", "/")
+    error = request.query_params.get("error", "")
+
+    return templates.TemplateResponse(request, "login.html", {
+        "next": next_url,
+        "error": error,
+        "last_username": "",
+        "version": VERSION,
+    })
+
+
+@router.post("/login")
+async def login_submit(request: Request) -> Response:
+    """Process login form submission.
+
+    Validates username/password against configured credentials.
+    On success: creates a session and redirects to the next URL.
+    On failure: redirects back to login with an error message.
+    """
+    config = getattr(request.app.state, "config", None)
+    if config is None:
+        return RedirectResponse(url="/login?error=Service+unavailable", status_code=303)
+
+    # Rate limit check
+    client_ip = request.client.host if request.client else "unknown"
+    if _check_web_rate_limit(client_ip):
+        logger.warning("Web auth: rate-limited login attempt from %s", client_ip)
+        return RedirectResponse(url="/login?error=Too+many+failed+attempts.+Try+again+later.", status_code=303)
+
+    # Parse form data
+    form = await request.form()
+    username = str(form.get("username", ""))
+    password = str(form.get("password", ""))
+    next_url = str(form.get("next", "/"))
+
+    # Get configured credentials
+    configured_username = await config.get("misc", "username")
+    configured_password = await config.get("misc", "password")
+
+    # If no credentials are configured, allow access
+    if not configured_username and not configured_password:
+        return RedirectResponse(url=next_url, status_code=303)
+
+    # Validate credentials with constant-time comparison
+    username_ok = hmac.compare_digest(username, configured_username)
+    password_ok = hmac.compare_digest(password, configured_password)
+
+    if username_ok and password_ok:
+        # Create session
+        session_id = await create_web_session(username)
+
+        # Determine if Secure flag should be set
+        https_enabled = await config.get_bool("misc", "https_enabled", False)
+
+        # If setup is not complete, force redirect to setup wizard
+        setup_complete = await config.get_bool("misc", "setup_complete", True)
+        if not setup_complete:
+            next_url = "/setup"
+
+        response = RedirectResponse(url=next_url, status_code=303)
+        response.set_cookie(
+            "web_session",
+            session_id,
+            max_age=28800,  # 8 hours, matches WEB_SESSION_TIMEOUT
+            path="/",
+            httponly=True,
+            samesite="lax",
+            secure=https_enabled,
+        )
+        return response
+
+    # Failed login
+    _record_web_failure(client_ip)
+    logger.warning("Web auth: failed login attempt from %s for user '%s'", client_ip, username)
+
+    # Re-render login page with error and last username
+    return templates.TemplateResponse(request, "login.html", {
+        "next": next_url,
+        "error": "Invalid username or password.",
+        "last_username": username,
+        "version": VERSION,
+    })
+
+
+@router.api_route("/logout", methods=["GET", "POST"])
+async def logout(request: Request) -> Response:
+    """Destroy the current web session and redirect to login."""
+    session_id = request.cookies.get("web_session")
+    if session_id:
+        await destroy_web_session(session_id)
+
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("web_session", path="/")
+    return response
+
+
+# ------------------------------------------------------------------ #
+#  Setup wizard                                                       #
+# ------------------------------------------------------------------ #
+
+
+@router.get("/setup", response_class=HTMLResponse)
+async def setup_page(request: Request) -> HTMLResponse:
+    """Render the setup wizard page.
+
+    This page is shown to users who logged in with temporary credentials.
+    They must set permanent credentials before they can use the application.
+    If setup is already complete, redirect to home.
+    """
+    config = getattr(request.app.state, "config", None)
+
+    # If setup is already complete, redirect to home
+    if config is not None:
+        setup_complete = await config.get_bool("misc", "setup_complete", True)
+        if setup_complete:
+            return RedirectResponse(url="/", status_code=303)
+
+    # Read current trusted networks value for pre-fill
+    trusted_networks = ""
+    temp_credentials = False
+    if config is not None:
+        trusted_networks = await config.get("misc", "trusted_networks", "")
+        temp_credentials = await config.get_bool("misc", "temp_credentials", False)
+
+    error = request.query_params.get("error", "")
+
+    return templates.TemplateResponse(request, "setup.html", {
+        "version": VERSION,
+        "error": error,
+        "trusted_networks": trusted_networks,
+        "temp_credentials": temp_credentials,
+    })
+
+
+@router.post("/setup")
+async def setup_submit(request: Request) -> Response:
+    """Process the setup wizard form submission.
+
+    Validates and saves permanent credentials, then marks setup as complete.
+    Creates a new session with the new credentials and destroys the old one.
+    """
+    config = getattr(request.app.state, "config", None)
+    if config is None:
+        return RedirectResponse(url="/setup?error=Service+unavailable", status_code=303)
+
+    form = await request.form()
+    username = str(form.get("username", "")).strip()
+    password = str(form.get("password", ""))
+    password_confirm = str(form.get("password_confirm", ""))
+    trusted_networks = str(form.get("trusted_networks", "")).strip()
+
+    # Validate
+    if len(username) < 3:
+        return RedirectResponse(
+            url="/setup?error=Username+must+be+at+least+3+characters", status_code=303
+        )
+    if len(password) < 6:
+        return RedirectResponse(
+            url="/setup?error=Password+must+be+at+least+6+characters", status_code=303
+        )
+    if password != password_confirm:
+        return RedirectResponse(
+            url="/setup?error=Passwords+do+not+match", status_code=303
+        )
+
+    try:
+        await config.set_web_credentials(
+            username=username,
+            password=password,
+            trusted_networks=trusted_networks,
+        )
+        logger.info("Setup wizard: credentials set for user '%s'", username)
+    except ValueError as e:
+        return RedirectResponse(
+            url=f"/setup?error={str(e)}", status_code=303
+        )
+
+    # Destroy the old session (logged in with temp creds) and create a new one
+    old_session_id = request.cookies.get("web_session")
+    if old_session_id:
+        await destroy_web_session(old_session_id)
+
+    new_session_id = await create_web_session(username)
+
+    # Determine if Secure flag should be set
+    https_enabled = await config.get_bool("misc", "https_enabled", False)
+
+    response = RedirectResponse(url="/?saved=1", status_code=303)
+    response.set_cookie(
+        "web_session",
+        new_session_id,
+        max_age=28800,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=https_enabled,
+    )
+    return response
 
 
 # ------------------------------------------------------------------ #
@@ -1102,15 +1353,70 @@ async def config_redirect(request: Request) -> HTMLResponse:
 @router.get("/config/general", response_class=HTMLResponse)
 async def config_general(request: Request) -> HTMLResponse:
     config = getattr(request.app.state, "config", None)
+    # The general config page needs the actual API key values for the
+    # Show/Copy buttons (displayed behind type="password" inputs).
+    # The password field always uses value="" to avoid sending the current
+    # password to the browser.
     misc = await config.get_section("misc", redact_secrets=False) if config else {}
-    misc_display = await config.get_section("misc", redact_secrets=True) if config else {}
     ctx = await _base_context(request, page="config", active_tab="general",
-        misc=misc, misc_display=misc_display)
+        misc=misc)
     return templates.TemplateResponse(request, "config/general.html", ctx)
 
 
 @router.post("/config/general", response_class=HTMLResponse)
 async def config_general_save(request: Request) -> HTMLResponse:
+    """Save general config, handling credential changes through set_web_credentials().
+
+    Username and password are restricted keys that cannot be changed through
+    the generic _save_config() path. This handler:
+    1. Extracts username/password/trusted_networks from the form
+    2. If username or password is non-empty, calls config.set_web_credentials()
+    3. Delegates remaining fields to _save_config() (which silently skips
+       restricted keys)
+    """
+    config = getattr(request.app.state, "config", None)
+    if config is None:
+        return RedirectResponse(url="/config/general", status_code=303)
+
+    form = await request.form()
+    new_username = str(form.get("misc.username", "")).strip()
+    new_password = str(form.get("misc.password", "")).strip()
+    trusted_networks = str(form.get("misc.trusted_networks", "")).strip()
+
+    # Get current credentials to know if user is changing them
+    current_username = await config.get("misc", "username")
+
+    if new_username or new_password:
+        # User is setting/changing credentials
+        # If password is empty, keep current password (don't overwrite with blank)
+        if not new_password:
+            new_password = await config.get("misc", "password")
+        # If username is empty, keep current username
+        if not new_username:
+            new_username = current_username
+
+        try:
+            await config.set_web_credentials(
+                username=new_username,
+                password=new_password,
+                trusted_networks=trusted_networks,
+            )
+            logger.info("Config: web credentials updated for user '%s'", new_username)
+        except ValueError as e:
+            logger.warning("Config: failed to update credentials: %s", e)
+            return RedirectResponse(
+                url=f"/config/general?error={str(e)}", status_code=303
+            )
+    elif trusted_networks:
+        # Only updating trusted networks, not credentials
+        try:
+            await config.set("misc", "trusted_networks", trusted_networks)
+        except ValueError as e:
+            return RedirectResponse(
+                url=f"/config/general?error={str(e)}", status_code=303
+            )
+
+    # Save remaining (non-restricted) config fields
     return await _save_config(request, "general")
 
 
@@ -1233,6 +1539,11 @@ async def config_categories_save(request: Request) -> HTMLResponse:
             pp = int(form.get("pp", -1))
             script = str(form.get("script", ""))
             dir_val = str(form.get("dir", ""))
+            # Validate dir_val for path traversal: reject paths that escape
+            # the complete directory. Allow relative paths within complete_dir.
+            if dir_val and ("/" in dir_val or "\\" in dir_val or dir_val.startswith(".")):
+                logger.warning("Rejected category dir with path traversal: %s", dir_val)
+                dir_val = ""  # Reset to empty (uses default complete_dir)
             newzbin = str(form.get("newzbin", ""))
             await db.conn.execute(
                 "UPDATE categories SET priority=?, pp=?, script=?, dir=?, newzbin=? WHERE name=?",

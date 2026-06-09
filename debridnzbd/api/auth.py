@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import hmac
 import logging
+import time
+from collections import defaultdict
 from typing import Any
 
 from fastapi import Request
@@ -44,6 +46,25 @@ NZB_KEY_MODES = {
     "history",
     "get_cats",
 }
+
+# Rate limiting: track failed authentication attempts per IP.
+# Prevents brute-force attacks on API keys.
+_api_failures: dict[str, list[float]] = defaultdict(list)
+MAX_API_FAILURES = 10  # per minute
+API_RATE_WINDOW = 60  # seconds
+
+
+def _check_api_rate_limit(ip: str) -> bool:
+    """Check if an IP is rate-limited for API auth. Returns True if blocked."""
+    now = time.time()
+    cutoff = now - API_RATE_WINDOW
+    _api_failures[ip] = [t for t in _api_failures[ip] if t > cutoff]
+    return len(_api_failures[ip]) >= MAX_API_FAILURES
+
+
+def _record_api_failure(ip: str) -> None:
+    """Record a failed API auth attempt for rate limiting."""
+    _api_failures[ip].append(time.time())
 
 # Keywords that should be redacted in logs — any config value whose
 # keyword matches one of these will be logged as "***REDACTED***".
@@ -226,10 +247,23 @@ async def auth_middleware(request: Request, call_next: Any) -> Any:
         request.state.auth_level = "public"
         return await call_next(request)
 
+    # Rate limit check: block IPs with too many failed attempts
+    client_ip = request.client.host if request.client else "unknown"
+    if _check_api_rate_limit(client_ip):
+        logger.warning("Rate-limited API auth attempt from %s", client_ip)
+        return JSONResponse(
+            status_code=429,
+            content={"status": False, "error": "Too many failed attempts — try again later"},
+        )
+
     # Validate the API key
     is_valid, auth_level = await validate_api_key(request, config)
 
     if not is_valid:
+        # Rate limit failed attempts per IP
+        client_ip = request.client.host if request.client else "unknown"
+        _record_api_failure(client_ip)
+
         if auth_level == "":
             # No key provided
             return JSONResponse(

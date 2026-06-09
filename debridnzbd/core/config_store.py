@@ -51,12 +51,14 @@ PROTECTED_SECTIONS: frozenset[str] = frozenset({"_internal", "misc", "torbox", "
 # Keywords that cannot be modified via set() or deleted in specific sections.
 # These control authentication and authorization behavior within their section.
 # - misc.api_key / misc.nzb_key: SABnzbd API authentication keys
-# - misc.password: web UI authentication password
+# - misc.username / misc.password: web UI authentication credentials
 # - special.disable_api_key: controls whether API auth is required
 # Note: torbox.api_key is intentionally NOT restricted here — it's the Torbox
 # service credential that must be settable from the web UI config page.
+# Credentials can be changed through the dedicated set_web_credentials() method
+# or the setup wizard, which perform additional validation.
 SECTION_RESTRICTED_KEYWORDS: dict[str, frozenset[str]] = {
-    "misc": frozenset({"api_key", "nzb_key", "password"}),
+    "misc": frozenset({"api_key", "nzb_key", "password", "username"}),
     "special": frozenset({"disable_api_key"}),
 }
 
@@ -115,6 +117,9 @@ CONFIG_DEFAULTS: dict[str, dict[str, str]] = {
         "max_line_speed": "0",
         "speedlimit": "100",
         "article_cache_limit": "0",
+        "trusted_networks": "",
+        "temp_credentials": "0",
+        "setup_complete": "0",
     },
     "folders": {
         "download_dir": "downloads/incomplete",
@@ -142,6 +147,10 @@ CONFIG_DEFAULTS: dict[str, dict[str, str]] = {
         "download_on_complete": "1",
         "cdn_download_concurrency": "2",
         "poll_interval": "5",
+        "qbit_show_all_types": "0",
+        "qbit_dl_limit": "0",
+        "qbit_version": "4.6.3",
+        "qbit_webapi_version": "2.11.2",
     },
     "switches": {
         "max_retries": "3",
@@ -612,3 +621,135 @@ class ConfigStore:
         if count > 0:
             logger.info("Config section deleted: %s (%d keys removed)", section, count)
         return count
+
+    # ------------------------------------------------------------------ #
+    #  Web credential management                                          #
+    # ------------------------------------------------------------------ #
+
+    async def generate_temp_credentials(self) -> tuple[str, str]:
+        """Generate temporary credentials when none are configured.
+
+        Sets username to "admin" and password to a random 16-character
+        hex string. Marks the credentials as temporary so the setup
+        wizard is triggered on first login.
+
+        Returns:
+            Tuple of (username, password) for display in startup logs.
+        """
+        if self.db.conn is None:
+            raise RuntimeError("Database must be initialized before use")
+
+        import secrets
+
+        username = "admin"
+        password = secrets.token_hex(8)  # 16 hex chars
+
+        # Write directly to DB, bypassing set() restrictions on
+        # misc.username and misc.password
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "username", username),
+        )
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "password", password),
+        )
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "temp_credentials", "1"),
+        )
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "setup_complete", "0"),
+        )
+        await self.db.conn.commit()
+
+        logger.info("Temporary credentials generated (username=admin)")
+        return username, password
+
+    async def set_web_credentials(
+        self,
+        username: str,
+        password: str,
+        trusted_networks: str = "",
+    ) -> None:
+        """Set permanent web UI credentials and optional trusted networks.
+
+        This is the dedicated method for changing web credentials. It
+        bypasses the SECTION_RESTRICTED_KEYWORDS restriction on
+        misc.username and misc.password because these are intentional
+        credential changes through a validated form (setup wizard or
+        config/general page).
+
+        Also clears the temp_credentials flag and marks setup as complete.
+
+        Args:
+            username: New username (minimum 3 characters).
+            password: New password (minimum 6 characters).
+            trusted_networks: Comma-separated CIDR list for auth bypass.
+
+        Raises:
+            ValueError: If username or password is too short, or
+                        trusted_networks contains invalid CIDR notation.
+            RuntimeError: If the database is not initialized.
+        """
+        if self.db.conn is None:
+            raise RuntimeError("Database must be initialized before use")
+
+        # Validate username
+        if len(username) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        if not username.strip():
+            raise ValueError("Username cannot be empty or whitespace")
+
+        # Validate password
+        if len(password) < 6:
+            raise ValueError("Password must be at least 6 characters")
+        if not password.strip():
+            raise ValueError("Password cannot be empty or whitespace")
+
+        # Validate trusted networks CIDR format
+        if trusted_networks:
+            import ipaddress
+
+            for cidr in trusted_networks.split(","):
+                cidr = cidr.strip()
+                if not cidr:
+                    continue
+                try:
+                    ipaddress.ip_network(cidr, strict=False)
+                except ValueError:
+                    raise ValueError(f"Invalid CIDR notation: {cidr}")
+
+        # Write credentials directly to DB, bypassing set() restrictions
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "username", username),
+        )
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "password", password),
+        )
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "temp_credentials", "0"),
+        )
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "setup_complete", "1"),
+        )
+
+        # Trusted networks is not restricted — use set()
+        await self.db.conn.execute(
+            "INSERT OR REPLACE INTO config (section, keyword, value) VALUES (?, ?, ?)",
+            ("misc", "trusted_networks", trusted_networks),
+        )
+
+        await self.db.conn.commit()
+
+        logger.info(
+            "Web credentials updated: username='%s', setup_complete=1, "
+            "trusted_networks='%s'",
+            username,
+            trusted_networks,
+        )
