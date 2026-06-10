@@ -106,6 +106,27 @@ debridnzbd
 python -m debridnzbd
 ```
 
+### Password Recovery
+
+If you lose access to the web UI, reset credentials from the command line:
+
+```bash
+# Generate temporary credentials (like first launch)
+python -m debridnzbd reset-password --temp --db-path /data/admin/debridnzbd.db
+
+# Set permanent credentials directly
+python -m debridnzbd reset-password -u myuser -p mypassword --db-path /data/admin/debridnzbd.db
+
+# Interactive (prompts for password)
+python -m debridnzbd reset-password -u myuser --db-path /data/admin/debridnzbd.db
+```
+
+For Docker, use `docker exec` or mount the volume and specify the path:
+
+```bash
+docker exec -it debridnzbd python -m debridnzbd reset-password --temp
+```
+
 ## Configuration
 
 ### First Launch

@@ -209,3 +209,12 @@ When no `misc.username`/`misc.password` are configured on first launch:
 - **qBittorrent API responses** follow qBittorrent WebUI API format (plain text for success/failure, JSON for data)
 - **Database:** Single SQLite file at `<admin_dir>/debridnzbd.db`
 - **Tests:** Use pytest-asyncio with mocked Torbox responses (httpx respx)
+
+## CLI Subcommands
+
+DebridNZBd supports the following subcommands:
+
+- `debridnzbd run [--host HOST] [--port PORT]` — Start the server (default when no subcommand given)
+- `debridnzbd reset-password [-u USER] [-p PASS] [--temp] [--db-path PATH]` — Reset web UI credentials
+
+The `reset-password` command is useful for password recovery. Use `--temp` to generate temporary credentials (like first launch), or provide `--username` and `--password` to set permanent credentials directly. If `--password` is omitted, it will be prompted interactively.

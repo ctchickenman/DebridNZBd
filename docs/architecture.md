@@ -538,6 +538,24 @@ The `misc.username` and `misc.password` keys are restricted — they cannot be c
 - The setup wizard (`/setup`)
 - The `config.set_web_credentials()` method
 - The General config page (which calls `set_web_credentials()` internally)
+- The `reset-password` CLI subcommand
+
+### CLI Password Recovery
+
+If web UI credentials are lost, the `reset-password` subcommand provides command-line recovery:
+
+```
+# Generate temporary credentials (like first launch)
+python -m debridnzbd reset-password --temp --db-path /data/admin/debridnzbd.db
+
+# Set permanent credentials directly
+python -m debridnzbd reset-password -u myuser -p mypassword --db-path /data/admin/debridnzbd.db
+
+# Interactive (prompts for password)
+python -m debridnzbd reset-password -u myuser --db-path /data/admin/debridnzbd.db
+```
+
+The command opens the database, runs migrations, seeds defaults, and either calls `generate_temp_credentials()` or `set_web_credentials()`. It validates username (≥3 chars) and password (≥6 chars) before touching the database.
 
 ### Trusted Networks
 
