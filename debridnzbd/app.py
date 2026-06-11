@@ -152,14 +152,18 @@ async def lifespan(app: FastAPI):
             )
             raise
 
-    # Admin directory gets restrictive permissions from creation to protect the
-    # database with API keys and passwords. Using mode= in mkdir() avoids the
-    # TOCTOU window between creation and chmod.
+    # Admin directory contains the database with API keys and passwords.
+    # We try to set restrictive permissions (0o700 = owner-only), but fall
+    # back to more permissive modes on filesystems that don't support chown
+    # (NFS with root_squash, CIFS/SMB, FAT32). This ensures the app can
+    # always start, even when the Docker entrypoint couldn't fix ownership.
     admin_path = Path(DEFAULT_ADMIN_DIR)
     try:
         if not admin_path.exists():
             logger.info("Creating admin directory: %s", admin_path)
-        admin_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # Create with 0o755 first (permissive) so the directory is accessible
+        # even if ownership couldn't be transferred. We tighten below.
+        admin_path.mkdir(parents=True, exist_ok=True, mode=0o755)
     except PermissionError:
         logger.error(
             "Cannot create admin directory '%s' — permission denied. "
@@ -168,14 +172,15 @@ async def lifespan(app: FastAPI):
             admin_path,
         )
         raise
-    # Also chmod in case the directory already existed with wrong permissions
+    # Tighten permissions to owner-only if possible. This protects the
+    # database credentials from other users on multi-user systems.
     try:
         os.chmod(str(admin_path), 0o700)
         logger.info("Set admin directory permissions to 0700 (owner-only): %s", admin_path)
     except OSError:
         logger.warning(
             "Could not set admin directory permissions to 0700: %s. "
-            "This is expected on some filesystems (e.g., NFS, FAT32). "
+            "This is expected on some filesystems (e.g., NFS, FAT32, CIFS/SMB). "
             "The database will still function but credentials may be readable by other users.",
             admin_path,
         )

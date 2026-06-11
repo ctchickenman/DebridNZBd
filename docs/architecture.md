@@ -615,12 +615,29 @@ The container starts as root via `docker-entrypoint.sh`:
 ```bash
 #!/bin/sh
 set -e
-chown -R debridnzbd:debridnzbd /data 2>/dev/null || true
-exec gosu debridnzbd "$@"
+DATA_DIR="/data"
+if [ "$(id -u)" = "0" ]; then
+    # Fix ownership of the data directory
+    if chown -R debridnzbd:debridnzbd "$DATA_DIR" 2>/dev/null; then
+        : # Ownership fixed successfully
+    else
+        # Filesystem doesn't support chown (NFS, SMB/CIFS, FAT32)
+        # Fall back to making directories world-writable
+        chmod -R a+rwX "$DATA_DIR" 2>/dev/null || true
+        chmod 777 "$DATA_DIR" 2>/dev/null || true
+    fi
+    # Drop privileges: try gosu → setpriv → su → run as root with warning
+    # ... (full script in docker-entrypoint.sh)
+fi
+exec "$@"
 ```
 
-1. **Fix ownership** — `chown -R debridnzbd:debridnzbd /data` ensures the named volume is writable by the application user. This handles the common case where Docker creates volumes owned by `root:root`.
-2. **Drop privileges** — `gosu debridnzbd` switches to UID 1000 before executing the CMD (uvicorn). This ensures the application never runs as root.
+1. **Fix ownership** — `chown -R debridnzbd:debridnzbd /data` ensures the named volume is writable by the application user. If `chown` fails (NFS with `root_squash`, CIFS/SMB, FAT32), the entrypoint falls back to `chmod -R a+rwX /data` so the app can function on restricted filesystems.
+2. **Drop privileges** — The entrypoint tries multiple methods to switch to UID 1000 (`debridnzbd`):
+   - **gosu** — preferred, proper signal handling and exit code forwarding
+   - **setpriv** — `util-linux`, works in most environments where gosu is blocked
+   - **su** — POSIX fallback, available everywhere
+   - If all methods fail (rootless Docker, restrictive seccomp), it logs a warning and continues as root
 3. **Execute** — `exec` replaces the shell process with the application, preserving signal handling (SIGTERM for graceful shutdown).
 
 ### Important Notes
@@ -628,13 +645,14 @@ exec gosu debridnzbd "$@"
 - **Do not set `--user` or `user:` in Docker/Docker Compose** — this would prevent the entrypoint from running as root, breaking the ownership fix and privilege drop.
 - **Host bind mounts** — For host directories bind-mounted to `/data` or `/data/downloads`, ensure they are writable by UID 1000 (`chown -R 1000:1000 /path/to/dir`).
 - **Named volumes** — Work automatically; the entrypoint fixes ownership on every container start.
+- **Restricted filesystems** — On filesystems that don't support Unix ownership (NFS with `root_squash`, SMB/CIFS, FAT32), the entrypoint makes `/data` world-writable as a fallback. The `admin/` directory is created with `0o755` permissions first, then tightened to `0o700` if the filesystem supports it.
 
 ### Directory Structure
 
 | Path | Owner | Permissions | Purpose |
 |------|-------|-------------|---------|
 | `/data` | debridnzbd:debridnzbd | 0755 | Base data directory |
-| `/data/admin` | debridnzbd:debridnzbd | 0700 | Database and config (owner-only) |
+| `/data/admin` | debridnzbd:debridnzbd | 0755 → 0700 | Database and config (tightened to owner-only when possible) |
 | `/data/admin/debridnzbd.db` | debridnzbd:debridnzbd | 0600 | SQLite database (owner-only) |
 | `/data/downloads/incomplete` | debridnzbd:debridnzbd | 0755 | Active downloads |
 | `/data/downloads/complete` | debridnzbd:debridnzbd | 0755 | Completed downloads |

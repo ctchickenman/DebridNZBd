@@ -109,10 +109,12 @@ async def do_reset_password(args: argparse.Namespace) -> None:
             print("Error: Password must be at least 6 characters", file=sys.stderr)
             sys.exit(1)
 
-    # Ensure admin directory exists with restrictive permissions
+    # Ensure admin directory exists. Create with 0o755 first (permissive)
+    # so it's accessible even on restricted filesystems, then tighten to
+    # 0o700 if the filesystem supports it.
     admin_dir = db_path.parent
     try:
-        admin_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        admin_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
     except PermissionError:
         print(
             f"Error: Cannot create directory '{admin_dir}' — permission denied.\n"
@@ -124,7 +126,7 @@ async def do_reset_password(args: argparse.Namespace) -> None:
     try:
         os.chmod(str(admin_dir), 0o700)
     except OSError:
-        pass  # Not critical for CLI tool
+        pass  # Not critical — permissive mode is acceptable for CLI tool
 
     # Open database, run migrations, seed defaults
     db = Database(db_path)
