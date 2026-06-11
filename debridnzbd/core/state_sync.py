@@ -163,6 +163,11 @@ async def check_torbox_availability(
         logger.warning("check_torbox_availability: invalid torbox_id %r", torbox_id)
         return ("", False, 0.0, "")
 
+    logger.info(
+        "check_torbox_availability: searching for torbox_id=%s (expected type=%s)",
+        dl_id, torbox_type,
+    )
+
     # Define the download types and their fetch functions, putting the
     # expected type first so we check it before the others.
     type_order = ["torrent", "usenet", "webdl"]
@@ -180,6 +185,12 @@ async def check_torbox_availability(
             else:
                 downloads = await client.get_web_download_list(bypass_cache=True)
 
+            logger.info(
+                "check_torbox_availability: %s list returned %d downloads, "
+                "searching for id=%s",
+                dtype, len(downloads), dl_id,
+            )
+
             dl = next((d for d in downloads if d.id == dl_id), None)
             if dl is not None:
                 status_lower = (dl.status or "").lower()
@@ -190,10 +201,23 @@ async def check_torbox_availability(
                         "status=%s, cdn_available=%s",
                         torbox_id, dtype, torbox_type, dl.status, is_available,
                     )
+                else:
+                    logger.info(
+                        "check_torbox_availability: found %s in %s list, "
+                        "status=%s, cdn_available=%s, progress=%.2f",
+                        torbox_id, dtype, dl.status, is_available, dl.progress or 0.0,
+                    )
                 return (dl.status or "", is_available, dl.progress or 0.0, dtype)
+            else:
+                logger.info(
+                    "check_torbox_availability: id=%s not found in %s list (%d items)",
+                    dl_id, dtype, len(downloads),
+                )
 
-        except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError):
-            logger.debug("check_torbox_availability: Torbox API error fetching %s list", dtype)
+        except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
+            logger.warning(
+                "check_torbox_availability: Torbox API error fetching %s list: %s", dtype, e,
+            )
         except Exception:
             logger.exception("check_torbox_availability: unexpected error fetching %s list", dtype)
 
