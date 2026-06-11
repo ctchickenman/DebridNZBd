@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <style>
+      .bg-dark { fill: #1a1a2e; }
+      .bg-card { fill: #16213e; }
+      .bg-hover { fill: #0f3460; }
+      .border-color { fill: #2a2a4a; }
+      .text-light { fill: #e0e0e0; }
+      .text-muted { fill: #8a8a9a; }
+      .primary { fill: #4a90d9; }
+      .success { fill: #27ae60; }
+      .warning { fill: #f39c12; }
+      .danger { fill: #e74c3c; }
+      .info { fill: #3498db; }
+      .stalled-orange { fill: #e67e22; }
+      .progress-track { fill: #2a2a4a; }
+      .progress-fill-blue { fill: #4a90d9; }
+      .progress-fill-green { fill: #27ae60; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="580" class="bg-dark"/>
+
+  <!-- Top Navigation Bar -->
+  <rect x="0" y="0" width="1200" height="50" class="bg-card"/>
+  <rect x="0" y="48" width="1200" height="2" class="primary"/>
+  <text x="20" y="31" font-size="18" font-weight="700" class="primary">Debrid<tspan class="text-light">NZBd</tspan></text>
+  <text x="180" y="31" font-size="14" font-weight="500" class="primary">Queue</text>
+  <text x="240" y="31" font-size="14" font-weight="500" class="text-muted">History</text>
+  <text x="310" y="31" font-size="14" font-weight="500" class="text-muted">Providers</text>
+  <text x="395" y="31" font-size="14" font-weight="500" class="text-muted">Config</text>
+  <text x="1020" y="31" font-size="13" font-weight="600" class="success">↓ 5.2 MB/s</text>
+  <rect x="1100" y="16" width="80" height="24" rx="4" fill="#f39c12"/>
+  <text x="1140" y="33" font-size="12" font-weight="600" fill="#000" text-anchor="middle">Pause All</text>
+
+  <!-- Queue Card Header -->
+  <rect x="20" y="65" width="1160" height="38" rx="8" class="bg-hover"/>
+  <rect x="20" y="85" width="1160" height="18" class="bg-hover"/>
+  <text x="36" y="89" font-size="14" font-weight="600" class="text-light">Download Queue</text>
+  <text x="1160" y="89" font-size="12" class="text-muted" text-anchor="end">3 jobs</text>
+
+  <!-- Table Header -->
+  <rect x="20" y="103" width="1160" height="30" class="bg-hover"/>
+  <text y="122" font-size="11" font-weight="600" class="text-muted" letter-spacing="0.5">
+    <tspan x="30">FILE</tspan>
+    <tspan x="310">STATUS</tspan>
+    <tspan x="410">TORBOX</tspan>
+    <tspan x="510">CATEGORY</tspan>
+    <tspan x="590">PRIORITY</tspan>
+    <tspan x="670">PROGRESS</tspan>
+    <tspan x="810">SIZE</tspan>
+    <tspan x="880">SPEED</tspan>
+    <tspan x="1000">TIME LEFT</tspan>
+    <tspan x="1090">ACTIONS</tspan>
+  </text>
+  <line x1="20" y1="133" x2="1180" y2="133" stroke="#2a2a4a" stroke-width="1"/>
+
+  <!-- Row 1: Normal Downloading Item -->
+  <rect x="20" y="133" width="1160" height="44" class="bg-card"/>
+  <text x="30" y="160" font-size="13" font-weight="600" class="text-light">Big.Buck.Bunny.S01E01.1080p.mkv</text>
+  <!-- Status badge: Downloading -->
+  <rect x="310" y="147" width="78" height="18" rx="10" fill="rgba(74,144,217,0.2)"/>
+  <text x="349" y="160" font-size="10" font-weight="600" fill="#4a90d9" text-anchor="middle">DOWNLOADING</text>
+  <text x="410" y="160" font-size="12" class="text-muted">Downloading</text>
+  <rect x="510" y="147" width="38" height="18" rx="10" fill="rgba(74,144,217,0.2)"/>
+  <text x="529" y="160" font-size="10" font-weight="600" fill="#4a90d9" text-anchor="middle">tv</text>
+  <text x="590" y="160" font-size="12" class="text-light">Normal</text>
+  <rect x="670" y="150" width="100" height="8" rx="3" class="progress-track"/>
+  <rect x="670" y="150" width="67" height="8" rx="3" class="progress-fill-blue"/>
+  <text x="778" y="160" font-size="12" class="text-muted">67%</text>
+  <text x="810" y="160" font-size="12" class="text-light">2.1 GB</text>
+  <text x="880" y="160" font-size="12" font-weight="600" class="success">5.2 MB/s</text>
+  <text x="1000" y="160" font-size="12" class="text-muted">3m 24s</text>
+  <!-- Actions: Pause + Delete -->
+  <rect x="1090" y="145" width="28" height="22" rx="4" fill="#f39c12"/>
+  <text x="1104" y="161" font-size="14" fill="#000" text-anchor="middle" font-weight="bold">⏸</text>
+  <rect x="1122" y="145" width="28" height="22" rx="4" fill="#e74c3c"/>
+  <text x="1136" y="161" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">✕</text>
+  <line x1="20" y1="177" x2="1180" y2="177" stroke="#2a2a4a" stroke-width="1"/>
+
+  <!-- Row 2: STALLED Download Item (highlighted) -->
+  <rect x="20" y="177" width="1160" height="44" fill="rgba(243,156,18,0.05)"/>
+  <text x="30" y="204" font-size="13" font-weight="600" class="text-light">Ubuntu-24.04-desktop-amd64.iso</text>
+  <!-- Status badge: Stalled (orange) -->
+  <rect x="310" y="191" width="52" height="18" rx="10" fill="rgba(243,156,18,0.25)"/>
+  <text x="336" y="204" font-size="10" font-weight="600" fill="#e67e22" text-anchor="middle">STALLED</text>
+  <text x="410" y="204" font-size="12" class="text-muted">Downloading</text>
+  <rect x="510" y="191" width="28" height="18" rx="10" fill="rgba(74,144,217,0.2)"/>
+  <text x="524" y="204" font-size="10" font-weight="600" fill="#4a90d9" text-anchor="middle">*</text>
+  <text x="590" y="204" font-size="12" class="text-light">Normal</text>
+  <!-- Progress bar -->
+  <rect x="670" y="194" width="100" height="8" rx="3" class="progress-track"/>
+  <rect x="670" y="194" width="34" height="8" rx="3" fill="#4a90d9" opacity="0.5"/>
+  <text x="778" y="204" font-size="12" fill="#e67e22">34%</text>
+  <text x="810" y="204" font-size="12" class="text-light">4.7 GB</text>
+  <!-- Speed: STALLED indicator -->
+  <text x="880" y="204" font-size="12" font-weight="600" fill="#e67e22">Stalled 2m 15s</text>
+  <text x="1000" y="204" font-size="12" class="text-muted">—</text>
+  <!-- Actions: Retry (↻) + Pause + Delete -->
+  <rect x="1062" y="189" width="28" height="22" rx="4" fill="#3498db"/>
+  <text x="1076" y="205" font-size="16" fill="#fff" text-anchor="middle" font-weight="bold">↻</text>
+  <rect x="1094" y="189" width="28" height="22" rx="4" fill="#f39c12"/>
+  <text x="1108" y="205" font-size="14" fill="#000" text-anchor="middle" font-weight="bold">⏸</text>
+  <rect x="1126" y="189" width="28" height="22" rx="4" fill="#e74c3c"/>
+  <text x="1140" y="205" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">✕</text>
+  <line x1="20" y1="221" x2="1180" y2="221" stroke="#2a2a4a" stroke-width="1"/>
+
+  <!-- Row 3: Fetching Item -->
+  <rect x="20" y="221" width="1160" height="44" class="bg-card"/>
+  <text x="30" y="248" font-size="13" font-weight="600" class="text-light">some-linux-distro-2026.iso</text>
+  <rect x="310" y="235" width="60" height="18" rx="10" fill="rgba(155,89,182,0.2)"/>
+  <text x="340" y="248" font-size="10" font-weight="600" fill="#9b59b6" text-anchor="middle">FETCHING</text>
+  <text x="410" y="248" font-size="12" class="text-muted">Downloaded</text>
+  <rect x="510" y="235" width="28" height="18" rx="10" fill="rgba(74,144,217,0.2)"/>
+  <text x="524" y="248" font-size="10" font-weight="600" fill="#4a90d9" text-anchor="middle">*</text>
+  <text x="590" y="248" font-size="12" class="text-light">Normal</text>
+  <rect x="670" y="238" width="100" height="8" rx="3" class="progress-track"/>
+  <rect x="670" y="238" width="100" height="8" rx="3" class="progress-fill-green"/>
+  <text x="778" y="248" font-size="12" class="text-muted">100%</text>
+  <text x="810" y="248" font-size="12" class="text-light">1.8 GB</text>
+  <text x="880" y="248" font-size="12" class="text-muted">—</text>
+  <text x="1000" y="248" font-size="12" class="text-muted">—</text>
+  <!-- Actions: Pause + Delete (no retry — not stalled) -->
+  <rect x="1090" y="233" width="28" height="22" rx="4" fill="#f39c12"/>
+  <text x="1104" y="249" font-size="14" fill="#000" text-anchor="middle" font-weight="bold">⏸</text>
+  <rect x="1122" y="233" width="28" height="22" rx="4" fill="#e74c3c"/>
+  <text x="1136" y="249" font-size="12" fill="#fff" text-anchor="middle" font-weight="bold">✕</text>
+
+  <!-- Bottom card border -->
+  <rect x="20" y="265" width="1160" height="3" rx="0 0 8 8" fill="#16213e"/>
+  <rect x="20" y="265" width="1160" height="1" fill="#2a2a4a"/>
+
+  <!-- Annotation: Stalled badge -->
+  <line x1="370" y1="305" x2="336" y2="210" stroke="#e67e22" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <rect x="305" y="310" width="200" height="36" rx="6" fill="#16213e" stroke="#e67e22" stroke-width="1"/>
+  <text x="405" y="325" font-size="11" fill="#e67e22" text-anchor="middle" font-weight="600">Stalled status badge</text>
+  <text x="405" y="340" font-size="10" fill="#8a8a9a" text-anchor="middle">badge-stalled (orange)</text>
+
+  <!-- Annotation: Stall duration -->
+  <line x1="960" y1="365" x2="940" y2="208" stroke="#e67e22" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <rect x="845" y="370" width="230" height="50" rx="6" fill="#16213e" stroke="#e67e22" stroke-width="1"/>
+  <text x="960" y="387" font-size="11" fill="#e67e22" text-anchor="middle" font-weight="600">Stall duration indicator</text>
+  <text x="960" y="402" font-size="10" fill="#8a8a9a" text-anchor="middle">Replaces speed when stalled;</text>
+  <text x="960" y="415" font-size="10" fill="#8a8a9a" text-anchor="middle">shows time since last progress</text>
+
+  <!-- Annotation: Retry button (now separate from pause) -->
+  <line x1="1080" y1="295" x2="1076" y2="213" stroke="#3498db" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <rect x="1030" y="300" width="140" height="50" rx="6" fill="#16213e" stroke="#3498db" stroke-width="1"/>
+  <text x="1100" y="317" font-size="11" fill="#3498db" text-anchor="middle" font-weight="600">Retry ↻ (always)</text>
+  <text x="1100" y="332" font-size="10" fill="#8a8a9a" text-anchor="middle">Separate from Pause;</text>
+  <text x="1100" y="345" font-size="10" fill="#8a8a9a" text-anchor="middle">shown when stalled</text>
+
+  <!-- Annotation: Row highlight -->
+  <line x1="20" y1="199" x2="80" y2="199" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <rect x="20" y="430" width="260" height="50" rx="6" fill="#16213e" stroke="#f39c12" stroke-width="1"/>
+  <text x="150" y="447" font-size="11" fill="#f39c12" text-anchor="middle" font-weight="600">Subtle row highlight</text>
+  <text x="150" y="462" font-size="10" fill="#8a8a9a" text-anchor="middle">stalled-row class — light</text>
+  <text x="150" y="475" font-size="10" fill="#8a8a9a" text-anchor="middle">orange tint on entire row</text>
+
+  <!-- Annotation: Normal speed -->
+  <line x1="930" y1="505" x2="930" y2="163" stroke="#27ae60" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <rect x="830" y="510" width="200" height="36" rx="6" fill="#16213e" stroke="#27ae60" stroke-width="1"/>
+  <text x="930" y="527" font-size="11" fill="#27ae60" text-anchor="middle" font-weight="600">Normal download speed</text>
+  <text x="930" y="542" font-size="10" fill="#8a8a9a" text-anchor="middle">Green when active, — when idle</text>
+
+  <!-- Legend -->
+  <rect x="20" y="495" width="400" height="70" rx="6" fill="#16213e" stroke="#2a2a4a" stroke-width="1"/>
+  <text x="36" y="515" font-size="12" font-weight="600" class="text-light">Stall Detection Feature</text>
+  <text x="36" y="533" font-size="10" class="text-muted">• Auto-detects downloads with no progress for 60+ seconds</text>
+  <text x="36" y="547" font-size="10" class="text-muted">• Auto-retry: Reannounce → Restart → Mark Failed</text>
+  <text x="36" y="561" font-size="10" class="text-muted">• Manual retry via ↻ button or ?mode=retry_stalled API</text>
+</svg>
