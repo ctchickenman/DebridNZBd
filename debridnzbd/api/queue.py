@@ -876,13 +876,15 @@ async def handle_queue(params: dict) -> JSONResponse:
     start = int(params.get("start") or 0)
     limit = int(params.get("limit") or 0)
 
-    # Read all active jobs ordered by position
+    # Read usenet-only jobs ordered by position.
+    # The SABnzbd API shows only usenet jobs — torrent and webdl jobs are
+    # managed through the qBittorrent API or processed in the background.
     cursor = await db.conn.execute(
         "SELECT nzo_id, filename, password, nzo_url, category, script, priority, pp, "
         "status, size, sizeleft, percentage, time_added, avg_age, "
         "torbox_id, torbox_type, torbox_hash, torbox_state, cdn_link, "
         "local_path, position, labels, stage_log, fail_message, speed, download_time "
-        "FROM jobs ORDER BY position"
+        "FROM jobs WHERE torbox_type = 'usenet' ORDER BY position"
     )
     rows = await cursor.fetchall()
 

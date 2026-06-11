@@ -147,7 +147,6 @@ CONFIG_DEFAULTS: dict[str, dict[str, str]] = {
         "download_on_complete": "1",
         "cdn_download_concurrency": "2",
         "poll_interval": "5",
-        "qbit_show_all_types": "0",
         "qbit_dl_limit": "0",
         "qbit_version": "4.6.3",
         "qbit_webapi_version": "2.11.2",

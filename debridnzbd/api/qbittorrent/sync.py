@@ -57,23 +57,14 @@ async def sync_maindata(
             "server_state": {},
         })
 
-    show_all_types = (await config.get("torbox", "qbit_show_all_types", "0")) == "1"
-
-    # Fetch all jobs
-    if show_all_types:
-        cursor = await db.conn.execute(
-            """SELECT nzo_id, filename, nzo_url, category, priority, status,
-                      size, sizeleft, percentage, time_added, time_completed,
-                      torbox_id, torbox_type, torbox_hash, speed, tags, position
-               FROM jobs ORDER BY position"""
-        )
-    else:
-        cursor = await db.conn.execute(
-            """SELECT nzo_id, filename, nzo_url, category, priority, status,
-                      size, sizeleft, percentage, time_added, time_completed,
-                      torbox_id, torbox_type, torbox_hash, speed, tags, position
-               FROM jobs WHERE torbox_type = 'torrent' ORDER BY position"""
-        )
+    # Only show torrent-type jobs in the qBittorrent API.
+    # Usenet and webdl jobs are managed through the SABnzbd API.
+    cursor = await db.conn.execute(
+        """SELECT nzo_id, filename, nzo_url, category, priority, status,
+                  size, sizeleft, percentage, time_added, time_completed,
+                  torbox_id, torbox_type, torbox_hash, speed, tags, position
+           FROM jobs WHERE torbox_type = 'torrent' ORDER BY position"""
+    )
 
     rows = await cursor.fetchall()
 
@@ -91,8 +82,8 @@ async def sync_maindata(
     for name, cat_dir in cat_rows:
         categories[name] = {"name": name, "savePath": cat_dir if cat_dir else f"{complete_dir}/{name}"}
 
-    # Build tags list
-    tag_cursor = await db.conn.execute("SELECT tags FROM jobs WHERE tags IS NOT NULL AND tags != ''")
+    # Build tags list (torrent-type only, matching what the qBittorrent client sees)
+    tag_cursor = await db.conn.execute("SELECT tags FROM jobs WHERE tags IS NOT NULL AND tags != '' AND torbox_type = 'torrent'")
     tag_rows = await tag_cursor.fetchall()
     all_tags: set[str] = set()
     for tag_row in tag_rows:

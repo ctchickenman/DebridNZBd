@@ -97,29 +97,19 @@ async def torrents_info(
     hashes: str = Query(""),
     sid: str = Depends(require_sid),
     db: Database = Depends(get_db),
-    config: ConfigStore = Depends(get_config),
 ):
     """List torrents with optional filtering, sorting, and pagination."""
     if not db or not db.conn:
         return JSONResponse(content=[])
 
-    show_all_types = (await config.get("torbox", "qbit_show_all_types", "0")) == "1"
-
-    # Fetch all jobs
-    if show_all_types:
-        cursor = await db.conn.execute(
-            """SELECT nzo_id, filename, nzo_url, category, priority, status,
-                      size, sizeleft, percentage, time_added, time_completed,
-                      torbox_id, torbox_type, torbox_hash, speed, tags, position
-               FROM jobs ORDER BY position"""
-        )
-    else:
-        cursor = await db.conn.execute(
-            """SELECT nzo_id, filename, nzo_url, category, priority, status,
-                      size, sizeleft, percentage, time_added, time_completed,
-                      torbox_id, torbox_type, torbox_hash, speed, tags, position
-               FROM jobs WHERE torbox_type = 'torrent' ORDER BY position"""
-        )
+    # Only show torrent-type jobs in the qBittorrent API.
+    # Usenet and webdl jobs are managed through the SABnzbd API.
+    cursor = await db.conn.execute(
+        """SELECT nzo_id, filename, nzo_url, category, priority, status,
+                  size, sizeleft, percentage, time_added, time_completed,
+                  torbox_id, torbox_type, torbox_hash, speed, tags, position
+           FROM jobs WHERE torbox_type = 'torrent' ORDER BY position"""
+    )
 
     rows = await cursor.fetchall()
     torrents = [build_torrent_info(row) for row in rows]
@@ -367,9 +357,9 @@ async def torrents_stop(
             [h.lower() for h in hashes],
         )
     else:
-        # 'all' — pause all active jobs
+        # 'all' — pause all active torrent-type jobs (what the qBittorrent client sees)
         await db.conn.execute(
-            "UPDATE jobs SET status = 'Paused' WHERE status IN ('Queued', 'Downloading')"
+            "UPDATE jobs SET status = 'Paused' WHERE status IN ('Queued', 'Downloading') AND torbox_type = 'torrent'"
         )
 
     await db.conn.commit()
@@ -396,8 +386,9 @@ async def torrents_start(
             [h.lower() for h in hashes],
         )
     else:
+        # 'all' — resume all paused torrent-type jobs (what the qBittorrent client sees)
         await db.conn.execute(
-            "UPDATE jobs SET status = 'Queued' WHERE status = 'Paused'"
+            "UPDATE jobs SET status = 'Queued' WHERE status = 'Paused' AND torbox_type = 'torrent'"
         )
 
     await db.conn.commit()
@@ -426,12 +417,12 @@ async def torrents_delete(
     if hashes:
         rows = await _find_jobs_by_hashes(db, hashes)
     else:
-        # 'all' — delete all jobs
+        # 'all' — delete all torrent-type jobs (what the qBittorrent client sees)
         cursor = await db.conn.execute(
             """SELECT nzo_id, filename, nzo_url, category, priority, status,
                       size, sizeleft, percentage, time_added, time_completed,
                       torbox_id, torbox_type, torbox_hash, speed, tags, position
-               FROM jobs"""
+               FROM jobs WHERE torbox_type = 'torrent'"""
         )
         rows = await cursor.fetchall()
 
@@ -705,7 +696,8 @@ async def torrents_set_category(
             [category] + [h.lower() for h in hashes],
         )
     else:
-        await db.conn.execute("UPDATE jobs SET category = ?", (category,))
+        # 'all' — set category on all torrent-type jobs
+        await db.conn.execute("UPDATE jobs SET category = ? WHERE torbox_type = 'torrent'", (category,))
 
     await db.conn.commit()
     return Response(content="Ok.", media_type="text/plain")
@@ -777,7 +769,8 @@ async def torrents_tags(
     if not db or not db.conn:
         return JSONResponse(content=[])
 
-    cursor = await db.conn.execute("SELECT tags FROM jobs WHERE tags IS NOT NULL AND tags != ''")
+    # Only show tags from torrent-type jobs (what the qBittorrent client sees)
+    cursor = await db.conn.execute("SELECT tags FROM jobs WHERE tags IS NOT NULL AND tags != '' AND torbox_type = 'torrent'")
     rows = await cursor.fetchall()
 
     all_tags: set[str] = set()
@@ -810,7 +803,8 @@ async def torrents_add_tags(
     if hashes:
         rows = await _find_jobs_by_hashes(db, hashes)
     else:
-        cursor = await db.conn.execute("SELECT nzo_id, tags FROM jobs")
+        # 'all' — add tags to all torrent-type jobs
+        cursor = await db.conn.execute("SELECT nzo_id, tags FROM jobs WHERE torbox_type = 'torrent'")
         rows = await cursor.fetchall()
 
     for row in rows:
@@ -845,7 +839,8 @@ async def torrents_remove_tags(
     if hashes:
         rows = await _find_jobs_by_hashes(db, hashes)
     else:
-        cursor = await db.conn.execute("SELECT nzo_id, tags FROM jobs")
+        # 'all' — remove tags from all torrent-type jobs
+        cursor = await db.conn.execute("SELECT nzo_id, tags FROM jobs WHERE torbox_type = 'torrent'")
         rows = await cursor.fetchall()
 
     for row in rows:

@@ -35,8 +35,9 @@ async def transfer_info(
 
     if db and db.conn:
         try:
+            # Only count torrent-type jobs — usenet/webdl are not shown in qBittorrent
             cursor = await db.conn.execute(
-                "SELECT COALESCE(SUM(speed), 0), COALESCE(SUM(size - sizeleft), 0) FROM jobs WHERE status IN ('Downloading', 'Fetching')"
+                "SELECT COALESCE(SUM(speed), 0), COALESCE(SUM(size - sizeleft), 0) FROM jobs WHERE status IN ('Downloading', 'Fetching') AND torbox_type = 'torrent'"
             )
             row = await cursor.fetchone()
             if row:

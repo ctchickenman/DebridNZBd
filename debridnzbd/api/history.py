@@ -49,14 +49,16 @@ async def handle_history(params: dict) -> JSONResponse:
     limit = int(params.get("limit") or 0)
     failed_only = int(params.get("failed_only") or 0)
 
-    # Build query with optional filters
+    # Build query with optional filters.
+    # The SABnzbd API shows only usenet jobs — torrent and webdl jobs are
+    # managed through the qBittorrent API or processed in the background.
     query = (
         "SELECT nzo_id, name, status, size, category, pp, storage, path, "
         "download_time, postproc_time, completed, time_added, duplicate_key, "
         "fail_message, stage_log, archive, torbox_id, torbox_type, nzo_url "
         "FROM history"
     )
-    conditions = []
+    conditions = ["torbox_type = 'usenet'"]
     query_params = []
 
     if failed_only:
@@ -122,11 +124,11 @@ async def handle_history(params: dict) -> JSONResponse:
     if limit > 0:
         slots = slots[:limit]
 
-    # Compute size stats
+    # Compute size stats (usenet-only totals)
     total_bytes = sum(s.bytes for s in slots) if slots else 0
-    # Use all rows (not just paginated) for totals
+    # Use all rows (not just paginated) for totals — usenet only
     all_total_bytes = 0
-    cursor = await db.conn.execute("SELECT COALESCE(SUM(size), 0) FROM history")
+    cursor = await db.conn.execute("SELECT COALESCE(SUM(size), 0) FROM history WHERE torbox_type = 'usenet'")
     row = await cursor.fetchone()
     if row:
         all_total_bytes = row[0]
@@ -137,10 +139,10 @@ async def handle_history(params: dict) -> JSONResponse:
         total_size=format_size(all_total_bytes),
     )
 
-    # Get last history update timestamp
+    # Get last history update timestamp (usenet only)
     try:
         cursor = await db.conn.execute(
-            "SELECT COALESCE(MAX(completed), 0) FROM history"
+            "SELECT COALESCE(MAX(completed), 0) FROM history WHERE torbox_type = 'usenet'"
         )
         row = await cursor.fetchone()
         if row:
@@ -235,8 +237,9 @@ async def handle_retry_all(params: dict) -> JSONResponse:
     db = getattr(request.app.state, "db", None) if request else None
 
     if db and db.conn:
+        # Only clear usenet failures — torrent/webdl are not shown in SABnzbd history
         cursor = await db.conn.execute(
-            "DELETE FROM history WHERE status = 'Failed'"
+            "DELETE FROM history WHERE status = 'Failed' AND torbox_type = 'usenet'"
         )
         await db.conn.commit()
         logger.info("retry_all: removed %d failed entries from history", cursor.rowcount)

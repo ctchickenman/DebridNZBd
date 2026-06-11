@@ -196,7 +196,7 @@ In your torrent management client (Transdroid, qBittorrent Remote, etc.):
 4. Username: `admin` (or whatever you configured in `misc.username`)
 5. Password: (as configured in `misc.password`)
 
-The qBittorrent API is available at `/api/v2/` and uses cookie-based SID authentication. By default, only torrent-type downloads are shown. To also display usenet and web downloads, set `torbox.qbit_show_all_types` to `1` via the SABnzbd config API.
+The qBittorrent API is available at `/api/v2/` and uses cookie-based SID authentication. Each API surface only shows its corresponding job type: the SABnzbd API shows usenet jobs, and the qBittorrent API shows torrent jobs. Web downloads (webdl) are processed in the background but not shown in either API. The web UI shows all types.
 
 ## API Overview
 

@@ -164,7 +164,8 @@ The Web UI uses session-based authentication with a setup wizard for first-time 
 
 - **Independent auth**: The qBittorrent `/api/v2/` prefix bypasses the SABnzbd auth middleware (which only intercepts exact `/api`). SID validation is handled by the `require_sid` dependency.
 - **Local-only pause**: Torbox doesn't support pausing individual torrents. When `torrents/stop` is called, the job status is set to `Paused` locally in SQLite. The state-sync poller skips `Paused` jobs to prevent overwriting the local state.
-- **Hash-based identification**: qBittorrent uses info hashes to identify torrents. For torrent-type jobs, the `torbox_hash` field is used directly. For usenet/webdl jobs, a SHA-1 hash of the `nzo_id` is synthesized (configurable via `torbox.qbit_show_all_types`).
+- **Hash-based identification**: qBittorrent uses info hashes to identify torrents. For torrent-type jobs, the `torbox_hash` field is used directly. For usenet/webdl jobs, a SHA-1 hash of the `nzo_id` is synthesized. The qBittorrent API only shows torrent-type jobs — usenet and webdl jobs are managed through the SABnzbd API.
+- **Type-based API separation**: Each API surface shows only its corresponding job type. The SABnzbd API (`/api?mode=queue`, `/api?mode=history`) shows only usenet jobs. The qBittorrent API (`/api/v2/`) shows only torrent jobs. The web UI shows all types. Actions (delete, pause, resume, retry) work across all types by nzo_id/hash regardless of which API is used.
 - **Session timeout**: SID cookies expire after 1 hour of inactivity. Login is rate-limited to 5 failures per minute per IP.
 
 ### State Mapping (DebridNZBd → qBittorrent)
@@ -441,7 +442,6 @@ All defaults are seeded into the `config` table on first run. Key sections:
 | `download_on_complete` | `1` | Auto-download CDN files to local disk |
 | `cdn_download_concurrency` | `2` | Max simultaneous CDN downloads |
 | `poll_interval` | `5` | Seconds between Torbox state polls |
-| `qbit_show_all_types` | `0` | Show usenet/webdl in qBittorrent API (0 = torrent only) |
 | `qbit_dl_limit` | `0` | Download speed limit for qBittorrent API (bytes/s, 0 = unlimited) |
 | `qbit_version` | `4.6.3` | Emulated qBittorrent version string |
 | `qbit_webapi_version` | `2.11.2` | Emulated qBittorrent WebAPI version string |

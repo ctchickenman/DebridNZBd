@@ -149,10 +149,17 @@ Referer/Origin header matching on mutating requests.
 
 | Section | Key | Default | Description |
 |---|---|---|---|
-| `torbox` | `qbit_show_all_types` | `0` | Show usenet/webdl jobs in qBittorrent API (0 = torrent only) |
 | `torbox` | `qbit_dl_limit` | `0` | Download speed limit in bytes/s (0 = unlimited) |
 | `torbox` | `qbit_version` | `4.6.3` | Emulated qBittorrent version string |
 | `torbox` | `qbit_webapi_version` | `2.11.2` | Emulated WebUI API version string |
+
+### Type Filtering
+
+Each API surface only shows jobs of its corresponding type:
+- **SABnzbd API** (`?mode=queue`, `?mode=history`): Only shows `usenet` jobs. Torrent and webdl jobs are accepted but hidden from queue/history listings.
+- **qBittorrent API** (`/api/v2/torrents/*`, `/api/v2/sync/*`): Only shows `torrent` jobs. Usenet and webdl jobs are hidden.
+- **Web UI**: Shows all job types (no filtering).
+- **Actions** (delete, pause, resume, retry): Work across all types by nzo_id/hash, regardless of which API surface is used.
 
 ## Web UI Authentication
 
