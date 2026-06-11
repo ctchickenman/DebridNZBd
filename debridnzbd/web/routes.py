@@ -1716,7 +1716,18 @@ async def config_special(request: Request) -> HTMLResponse:
 
 @router.post("/config/special", response_class=HTMLResponse)
 async def config_special_save(request: Request) -> HTMLResponse:
-    return await _save_config(request, "special")
+    from debridnzbd.app import setup_logging
+
+    result = await _save_config(request, "special")
+
+    # Reconfigure logging immediately with the new log level
+    config = getattr(request.app.state, "config", None)
+    if config:
+        log_level = await config.get("special", "log_level", "INFO")
+        log_dir = await config.get("folders", "log_dir", "logs")
+        setup_logging(log_dir=log_dir, log_level=log_level)
+
+    return result
 
 
 # ------------------------------------------------------------------ #

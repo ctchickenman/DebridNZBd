@@ -230,7 +230,7 @@ CONFIG_DEFAULTS: dict[str, dict[str, str]] = {
         "max_foldername_length": "246",
         "allow_old_ssl_tls": "0",
         "config_lock": "0",
-        "debug_mode": "0",
+        "log_level": "INFO",
     },
 }
 
@@ -307,6 +307,27 @@ class ConfigStore:
 
         await self.db.conn.commit()
         logger.info("Configuration defaults seeded")
+
+        # Migrate debug_mode → log_level
+        cursor = await self.db.conn.execute(
+            "SELECT value FROM config WHERE section = ? AND keyword = ?",
+            ("special", "debug_mode"),
+        )
+        row = await cursor.fetchone()
+        if row is not None:
+            old_val = row[0]
+            if old_val == "1":
+                await self.db.conn.execute(
+                    "UPDATE config SET value = ? WHERE section = ? AND keyword = ?",
+                    ("DEBUG", "special", "log_level"),
+                )
+            # Delete the old debug_mode key
+            await self.db.conn.execute(
+                "DELETE FROM config WHERE section = ? AND keyword = ?",
+                ("special", "debug_mode"),
+            )
+            await self.db.conn.commit()
+            logger.info("Migrated debug_mode=%s to log_level", old_val)
 
     # ------------------------------------------------------------------ #
     #  Read methods                                                       #

@@ -50,8 +50,15 @@
             <td><input type="hidden" name="special.api_logging" value="0"><label><input type="checkbox" name="special.api_logging" value="1" {% if special.get('api_logging', '1') == '1' %}checked{% endif %}></label></td>
           </tr>
           <tr>
-            <td>Debug mode <span class="hint">(verbose logging)</span></td>
-            <td><input type="hidden" name="special.debug_mode" value="0"><label><input type="checkbox" name="special.debug_mode" value="1" {% if special.get('debug_mode', '0') == '1' %}checked{% endif %}></label></td>
+            <td>Log level <span class="hint">(controls verbosity)</span></td>
+            <td>
+              <select name="special.log_level" style="width:200px;">
+                <option value="DEBUG" {% if special.get('log_level', 'INFO') == 'DEBUG' %}selected{% endif %}>DEBUG — Verbose</option>
+                <option value="INFO" {% if special.get('log_level', 'INFO') == 'INFO' %}selected{% endif %}>INFO — Normal</option>
+                <option value="WARNING" {% if special.get('log_level', 'INFO') == 'WARNING' %}selected{% endif %}>WARNING — Quiet</option>
+                <option value="ERROR" {% if special.get('log_level', 'INFO') == 'ERROR' %}selected{% endif %}>ERROR — Minimal</option>
+              </select>
+            </td>
           </tr>
           <tr>
             <td>Enable X-Frame-Options header</td>

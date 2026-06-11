@@ -46,18 +46,25 @@ DEFAULT_COMPLETE_DIR = "downloads/complete"
 DEFAULT_INCOMPLETE_DIR = "downloads/incomplete"
 
 
-def setup_logging(log_dir: str = "logs", debug: bool = False) -> None:
+def setup_logging(log_dir: str = "logs", log_level: str = "INFO", debug: bool | None = None) -> None:
     """Configure application-level logging with file and console output.
 
     Creates a RotatingFileHandler that writes to ``{log_dir}/debridnzbd.log``
     (10 MB max per file, 5 backups) and a StreamHandler for console output.
-    The log level is set to DEBUG when ``debug`` is True, otherwise INFO.
 
     Args:
         log_dir: Directory for log files. Created if it doesn't exist.
-        debug: If True, set log level to DEBUG for verbose output.
+        log_level: Logging level as a string ("DEBUG", "INFO", "WARNING", "ERROR").
+            Defaults to "INFO" if unrecognised.
+        debug: Deprecated. If True, overrides log_level to "DEBUG".
     """
-    log_level = logging.DEBUG if debug else logging.INFO
+    # Backward compat: debug=True means DEBUG level
+    if debug is True:
+        log_level = "DEBUG"
+    numeric_level = getattr(logging, log_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        numeric_level = logging.INFO
+        log_level = "INFO"
 
     # Ensure log directory exists
     log_path = Path(log_dir)
@@ -129,8 +136,8 @@ async def lifespan(app: FastAPI):
     logger.info("DebridNZBd starting up...")
 
     # --- Configure logging early (before database/config init) ---
-    # Use defaults first; once config is loaded we may reconfigure if debug_mode is set.
-    setup_logging(log_dir="logs", debug=False)
+    # Use defaults first; once config is loaded we reconfigure with saved settings.
+    setup_logging(log_dir="logs", log_level="INFO")
 
     # --- Create download directories if they don't exist ---
     import os
@@ -235,12 +242,11 @@ async def lifespan(app: FastAPI):
     app.state.start_time = __import__("time").time()  # For uptime calculation
 
     # --- Reconfigure logging with config values ---
-    debug_mode = await config.get_bool("special", "debug_mode", False)
+    log_level = await config.get("special", "log_level", "INFO")
     log_dir = await config.get("folders", "log_dir", "logs")
-    if debug_mode or log_dir != "logs":
-        setup_logging(log_dir=log_dir, debug=debug_mode)
-        if debug_mode:
-            logger.info("Debug mode enabled — verbose logging active")
+    setup_logging(log_dir=log_dir, log_level=log_level)
+    if log_level.upper() == "DEBUG":
+        logger.info("Debug mode enabled — verbose logging active")
 
     # --- Security warnings ---
     disable_api_key = await config.get_bool("special", "disable_api_key", False)
