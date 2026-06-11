@@ -10,6 +10,8 @@
   <div class="card-header">
     <span>{% if log_file_path %}{{ log_file_path }}{% else %}Logs{% endif %}</span>
     <div style="display:flex; gap:8px; align-items:center;">
+      <button id="log-toggle" class="btn btn-sm btn-primary" title="Pause live updates">⏸ Pause</button>
+      <button id="log-clear" class="btn btn-sm btn-outline" title="Clear displayed logs">Clear</button>
       <a href="/logs?lines=100" class="btn btn-sm btn-outline">Last 100</a>
       <a href="/logs?lines=500" class="btn btn-sm btn-outline">Last 500</a>
       <a href="/logs?lines=2000" class="btn btn-sm btn-outline">Last 2000</a>
@@ -17,7 +19,7 @@
     </div>
   </div>
   <div class="card-body" style="padding:0;">
-    <pre style="margin:0; padding:16px; background:var(--bg-dark); color:var(--text-light); font-size:12px; font-family:'Menlo', 'Consolas', 'DejaVu Sans Mono', monospace; white-space:pre-wrap; word-break:break-all; max-height:70vh; overflow-y:auto;">{{ log_content }}</pre>
+    <pre id="log-content" style="margin:0; padding:16px; background:var(--bg-dark); color:var(--text-light); font-size:12px; font-family:'Menlo', 'Consolas', 'DejaVu Sans Mono', monospace; white-space:pre-wrap; word-break:break-all; max-height:70vh; overflow-y:auto;">{{ log_content }}</pre>
   </div>
 </div>
 
@@ -25,4 +27,103 @@
   <a href="/config/special" class="btn btn-secondary">← Back to Settings</a>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var pre = document.getElementById('log-content');
+  var toggleBtn = document.getElementById('log-toggle');
+  var clearBtn = document.getElementById('log-clear');
+  var playing = true;
+  var filePos = {{ max_lines }} === 10000 ? 0 : 0; // start with incremental mode
+  var POLL_INTERVAL = 2000; // 2 seconds
+  var MAX_LINES = 500; // max lines to keep in the display
+  var timerId = null;
+
+  // For incremental mode, we need to know the initial file size.
+  // On first poll we'll get the full state, then track position.
+  var initialLoad = true;
+
+  function poll() {
+    var url = '/logs/stream?lines=200';
+    if (filePos > 0) {
+      url += '&after=' + filePos;
+    }
+    fetch(url)
+      .then(function(resp) { return resp.json(); })
+      .then(function(data) {
+        if (!data.lines || data.lines.length === 0) return;
+
+        // On first load with after=0, replace all content
+        if (initialLoad) {
+          var newText = data.lines.join('\n');
+          if (pre.textContent) {
+            pre.textContent = pre.textContent + '\n' + newText;
+          } else {
+            pre.textContent = newText;
+          }
+          initialLoad = false;
+        } else {
+          // Append new lines
+          pre.textContent = pre.textContent + '\n' + data.lines.join('\n');
+        }
+
+        // Update file position for incremental fetches
+        filePos = data.pos || 0;
+
+        // Trim if too many lines
+        var lines = pre.textContent.split('\n');
+        if (lines.length > MAX_LINES) {
+          pre.textContent = lines.slice(-MAX_LINES).join('\n');
+        }
+
+        // Auto-scroll to bottom if already near bottom
+        var atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 50;
+        if (atBottom) {
+          pre.scrollTop = pre.scrollHeight;
+        }
+      })
+      .catch(function() {
+        // Silently ignore fetch errors
+      });
+  }
+
+  function startPolling() {
+    if (timerId) clearInterval(timerId);
+    timerId = setInterval(poll, POLL_INTERVAL);
+    // Also poll immediately
+    poll();
+  }
+
+  function stopPolling() {
+    if (timerId) {
+      clearInterval(timerId);
+      timerId = null;
+    }
+  }
+
+  toggleBtn.addEventListener('click', function() {
+    playing = !playing;
+    if (playing) {
+      toggleBtn.textContent = '⏸ Pause';
+      toggleBtn.title = 'Pause live updates';
+      toggleBtn.className = 'btn btn-sm btn-primary';
+      startPolling();
+    } else {
+      toggleBtn.textContent = '▶ Play';
+      toggleBtn.title = 'Resume live updates';
+      toggleBtn.className = 'btn btn-sm btn-outline';
+      stopPolling();
+    }
+  });
+
+  clearBtn.addEventListener('click', function() {
+    pre.textContent = '';
+  });
+
+  // Start live updates
+  startPolling();
+})();
+</script>
 {% endblock %}

@@ -1774,6 +1774,61 @@ async def logs_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "logs.html", ctx)
 
 
+@router.get("/logs/stream")
+async def logs_stream(request: Request) -> JSONResponse:
+    """Return latest log lines as JSON for live updates.
+
+    Accepts ``?lines=N`` (default 200) and ``?after=pos`` to fetch only
+    lines added after the given byte position (for incremental updates).
+    """
+    config = getattr(request.app.state, "config", None)
+    log_dir = "logs"
+    if config:
+        log_dir = await config.get("folders", "log_dir", "logs")
+
+    max_lines = int(request.query_params.get("lines", "200"))
+    after = int(request.query_params.get("after", "0"))
+
+    log_path = Path(log_dir)
+    if not log_path.is_dir():
+        return JSONResponse({"lines": [], "pos": 0, "total": 0})
+
+    log_files = sorted(log_path.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not log_files:
+        return JSONResponse({"lines": [], "pos": 0, "total": 0})
+
+    log_file = log_files[0]
+    try:
+        file_size = log_file.stat().st_size
+    except OSError:
+        return JSONResponse({"lines": [], "pos": 0, "total": 0})
+
+    # If the caller has seen up to `after` bytes, only read the tail
+    if after > 0 and after < file_size:
+        # Read from `after` offset to end
+        try:
+            with open(log_file, "r", errors="replace") as f:
+                f.seek(after)
+                new_text = f.read()
+        except OSError:
+            return JSONResponse({"lines": [], "pos": file_size, "total": file_size})
+        new_lines = new_text.splitlines()
+        # Limit to max_lines from the new data
+        if len(new_lines) > max_lines:
+            new_lines = new_lines[-max_lines:]
+        return JSONResponse({"lines": new_lines, "pos": file_size, "total": file_size})
+
+    # Full read: return last max_lines
+    try:
+        text = log_file.read_text(errors="replace")
+        all_lines = text.splitlines()
+        lines = all_lines[-max_lines:]
+    except OSError:
+        return JSONResponse({"lines": [], "pos": file_size, "total": file_size})
+
+    return JSONResponse({"lines": lines, "pos": file_size, "total": file_size})
+
+
 # ------------------------------------------------------------------ #
 #  Directory browser API (for folder picker UI)                       #
 # ------------------------------------------------------------------ #
