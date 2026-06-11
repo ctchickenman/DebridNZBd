@@ -64,7 +64,7 @@ debridnzbd/
 
 The Docker image uses a multi-stage build (builder + runtime) and an entrypoint script that handles volume ownership:
 
-- **Entry point**: `docker-entrypoint.sh` runs as root, fixes `/data` ownership via `chown -R debridnzbd:debridnzbd /data`. If `chown` fails (NFS, SMB/CIFS, FAT32), falls back to `chmod -R a+rwX /data`. Then drops privileges to UID 1000 via `gosu` (with `setpriv`/`su` fallbacks).
+- **Entry point**: `docker-entrypoint.sh` runs as root, fixes `/data` ownership via `chown -R debridnzbd:debridnzbd /data`, then **always** runs `chmod -R a+rwX /data` as a safety net (since `chown` silently fails on restricted filesystems like NFS, SMB/CIFS). Drops privileges to UID 1000 via `gosu` (with `setpriv`/`su` fallbacks).
 - **User**: The app runs as `debridnzbd` (UID 1000). Do NOT set `--user` or `user:` in Docker/Docker Compose — it bypasses the entrypoint's privilege drop
 - **Volume**: `/data` holds all persistent data (database, config, downloads, logs)
 - **Ports**: 8080 (configurable via `--port`)

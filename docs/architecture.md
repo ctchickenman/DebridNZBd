@@ -618,22 +618,19 @@ The container starts as root via `docker-entrypoint.sh`:
 set -e
 DATA_DIR="/data"
 if [ "$(id -u)" = "0" ]; then
-    # Fix ownership of the data directory
-    if chown -R debridnzbd:debridnzbd "$DATA_DIR" 2>/dev/null; then
-        : # Ownership fixed successfully
-    else
-        # Filesystem doesn't support chown (NFS, SMB/CIFS, FAT32)
-        # Fall back to making directories world-writable
-        chmod -R a+rwX "$DATA_DIR" 2>/dev/null || true
-        chmod 777 "$DATA_DIR" 2>/dev/null || true
-    fi
+    # Fix ownership — chown may silently fail on restricted filesystems
+    # (NFS root_squash, CIFS/SMB, FAT32 return exit code 0 but don't
+    # actually change ownership), so chmod always runs as a safety net.
+    chown -R debridnzbd:debridnzbd "$DATA_DIR" 2>/dev/null || true
+    chmod -R a+rwX "$DATA_DIR" 2>/dev/null || true
+    chmod 777 "$DATA_DIR" 2>/dev/null || true
     # Drop privileges: try gosu → setpriv → su → run as root with warning
     # ... (full script in docker-entrypoint.sh)
 fi
 exec "$@"
 ```
 
-1. **Fix ownership** — `chown -R debridnzbd:debridnzbd /data` ensures the named volume is writable by the application user. If `chown` fails (NFS with `root_squash`, CIFS/SMB, FAT32), the entrypoint falls back to `chmod -R a+rwX /data` so the app can function on restricted filesystems.
+1. **Fix ownership and permissions** — `chown -R debridnzbd:debridnzbd /data` ensures the named volume is writable by the application user. Then `chmod -R a+rwX /data` **always runs** as a safety net — on restricted filesystems (NFS with `root_squash`, CIFS/SMB, FAT32), `chown` may silently fail (returning exit code 0 without changing ownership), so the `chmod` ensures directories are traversable and files are writable regardless.
 2. **Drop privileges** — The entrypoint tries multiple methods to switch to UID 1000 (`debridnzbd`):
    - **gosu** — preferred, proper signal handling and exit code forwarding
    - **setpriv** — `util-linux`, works in most environments where gosu is blocked
@@ -645,8 +642,8 @@ exec "$@"
 
 - **Do not set `--user` or `user:` in Docker/Docker Compose** — this would prevent the entrypoint from running as root, breaking the ownership fix and privilege drop.
 - **Host bind mounts** — For host directories bind-mounted to `/data` or `/data/downloads`, ensure they are writable by UID 1000 (`chown -R 1000:1000 /path/to/dir`).
-- **Named volumes** — Work automatically; the entrypoint fixes ownership on every container start.
-- **Restricted filesystems** — On filesystems that don't support Unix ownership (NFS with `root_squash`, SMB/CIFS, FAT32), the entrypoint makes `/data` world-writable as a fallback. The `admin/` directory is created with `0o755` permissions first, then tightened to `0o700` if the filesystem supports it.
+- **Named volumes** — Work automatically; the entrypoint fixes ownership and permissions on every container start.
+- **Restricted filesystems** — On filesystems that don't support Unix ownership (NFS with `root_squash`, SMB/CIFS, FAT32), `chown` silently fails and `chmod` ensures accessibility. The `admin/` directory is created with `0o755` permissions first, then tightened to `0o700` if the filesystem supports it. The app also handles `PermissionError` on `Path.exists()` calls gracefully, logging warnings and attempting to proceed.
 
 ### Directory Structure
 
