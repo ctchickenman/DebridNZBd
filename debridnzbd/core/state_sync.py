@@ -131,61 +131,78 @@ async def check_torbox_availability(
     client: TorboxClient,
     torbox_id: str,
     torbox_type: str,
-) -> tuple[str, bool, float]:
+) -> tuple[str, bool, float, str]:
     """Check if a download is available on Torbox CDN.
 
     Queries Torbox for the current download status and returns whether
     the file is available for CDN download (completed, cached, or seeding).
 
+    If the download is not found in the list matching ``torbox_type``, searches
+    all other download types as a fallback. This handles cases where the stored
+    type doesn't match the actual Torbox type (e.g. a URL classified as usenet
+    locally but stored as a torrent on Torbox).
+
     Args:
         client: An authenticated TorboxClient instance.
         torbox_id: The Torbox download ID (string form of integer).
-        torbox_type: The download type ("usenet", "torrent", or "webdl").
+        torbox_type: The expected download type ("usenet", "torrent", or "webdl").
 
     Returns:
-        A tuple of (torbox_status, is_cdn_available, progress) where:
+        A tuple of (torbox_status, is_cdn_available, progress, actual_type) where:
         - torbox_status: The raw status string from Torbox (e.g. "completed",
           "downloading", "seeding"), or "" if not found.
         - is_cdn_available: True if the file can be downloaded from CDN
           (status is completed, cached, or seeding).
         - progress: Download progress as a float 0.0-1.0.
+        - actual_type: The type where the download was actually found
+          ("usenet", "torrent", or "webdl"), or "" if not found.
     """
     try:
         dl_id = int(torbox_id)
     except (ValueError, TypeError):
-        return ("", False, 0.0)
+        logger.warning("check_torbox_availability: invalid torbox_id %r", torbox_id)
+        return ("", False, 0.0, "")
 
-    try:
-        if torbox_type == "torrent":
-            downloads = await client.get_torrent_list(bypass_cache=True)
+    # Define the download types and their fetch functions, putting the
+    # expected type first so we check it before the others.
+    type_order = ["torrent", "usenet", "webdl"]
+    # Move the expected type to the front
+    if torbox_type in type_order:
+        type_order.remove(torbox_type)
+        type_order.insert(0, torbox_type)
+
+    for dtype in type_order:
+        try:
+            if dtype == "torrent":
+                downloads = await client.get_torrent_list(bypass_cache=True)
+            elif dtype == "usenet":
+                downloads = await client.get_usenet_list(bypass_cache=True)
+            else:
+                downloads = await client.get_web_download_list(bypass_cache=True)
+
             dl = next((d for d in downloads if d.id == dl_id), None)
-            if dl:
+            if dl is not None:
                 status_lower = (dl.status or "").lower()
                 is_available = status_lower in COMPLETED_STATUSES
-                return (dl.status or "", is_available, dl.progress or 0.0)
+                if dtype != torbox_type:
+                    logger.info(
+                        "check_torbox_availability: found %s as %s (expected %s), "
+                        "status=%s, cdn_available=%s",
+                        torbox_id, dtype, torbox_type, dl.status, is_available,
+                    )
+                return (dl.status or "", is_available, dl.progress or 0.0, dtype)
 
-        elif torbox_type == "usenet":
-            downloads = await client.get_usenet_list(bypass_cache=True)
-            dl = next((d for d in downloads if d.id == dl_id), None)
-            if dl:
-                status_lower = (dl.status or "").lower()
-                is_available = status_lower in COMPLETED_STATUSES
-                return (dl.status or "", is_available, dl.progress or 0.0)
+        except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError):
+            logger.debug("check_torbox_availability: Torbox API error fetching %s list", dtype)
+        except Exception:
+            logger.exception("check_torbox_availability: unexpected error fetching %s list", dtype)
 
-        elif torbox_type == "webdl":
-            downloads = await client.get_web_download_list(bypass_cache=True)
-            dl = next((d for d in downloads if d.id == dl_id), None)
-            if dl:
-                status_lower = (dl.status or "").lower()
-                is_available = status_lower in COMPLETED_STATUSES
-                return (dl.status or "", is_available, dl.progress or 0.0)
-
-    except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError):
-        logger.debug("check_torbox_availability: Torbox API error for %s:%s", torbox_type, torbox_id)
-    except Exception:
-        logger.exception("check_torbox_availability: unexpected error for %s:%s", torbox_type, torbox_id)
-
-    return ("", False, 0.0)
+    logger.warning(
+        "check_torbox_availability: download %s not found in any Torbox list "
+        "(searched torrent, usenet, webdl)",
+        torbox_id,
+    )
+    return ("", False, 0.0, "")
 
 
 async def run_state_sync(app: FastAPI, cancelled: asyncio.Event) -> None:
@@ -602,9 +619,22 @@ async def _retry_stalled_job(
     if stall_retries == 1:
         # First retry: check if CDN download is available before reannounce
         try:
-            torbox_status, is_cdn_available, progress = await check_torbox_availability(
+            torbox_status, is_cdn_available, progress, actual_type = await check_torbox_availability(
                 client, str(torbox_id), torbox_type,
             )
+            # Fix torbox_type if the download was found in a different type list
+            effective_type = actual_type or torbox_type
+            if actual_type and actual_type != torbox_type:
+                logger.info("State sync: correcting torbox_type for %s from %s to %s", nzo_id, torbox_type, actual_type)
+                try:
+                    await db.conn.execute(
+                        "UPDATE jobs SET torbox_type = ? WHERE nzo_id = ?",
+                        (actual_type, nzo_id),
+                    )
+                    await db.conn.commit()
+                except Exception:
+                    logger.debug("State sync: failed to correct torbox_type for %s", nzo_id)
+
             if is_cdn_available:
                 # CDN is available — transition to Fetching so CDN processor picks it up
                 try:
@@ -626,11 +656,12 @@ async def _retry_stalled_job(
             logger.debug("State sync: CDN availability check failed for %s, falling back to reannounce", nzo_id)
 
         # CDN not available or check failed — fall back to resume/reannounce
+        # Use effective_type (corrected if needed) for the control command
         try:
-            if torbox_type == "torrent":
+            if effective_type == "torrent":
                 await client.control_torrent(dl_id, "Reannounce")
                 logger.info("State sync: sent Reannounce for stalled torrent %s (torbox_id=%s)", nzo_id, torbox_id)
-            elif torbox_type == "usenet":
+            elif effective_type == "usenet":
                 await client.control_usenet_download(dl_id, "Resume")
                 logger.info("State sync: sent Resume for stalled usenet %s (torbox_id=%s)", nzo_id, torbox_id)
             else:

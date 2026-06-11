@@ -1162,11 +1162,29 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
         return JSONResponse(content={"status": True, "action": "stall_counters_reset"})
 
     client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+    effective_type = torbox_type  # fallback if API call fails
     try:
         # Check if the download is available on Torbox CDN
-        torbox_status, is_cdn_available, progress = await check_torbox_availability(
+        # Searches all download types as a fallback if the stored type doesn't match
+        torbox_status, is_cdn_available, progress, actual_type = await check_torbox_availability(
             client, str(torbox_id), torbox_type,
         )
+
+        # Fix torbox_type if the download was found in a different type list
+        effective_type = actual_type or torbox_type
+        if actual_type and actual_type != torbox_type:
+            logger.info(
+                "retry_stalled: correcting torbox_type for %s from %s to %s",
+                nzo_id, torbox_type, actual_type,
+            )
+            try:
+                await db.conn.execute(
+                    "UPDATE jobs SET torbox_type = ? WHERE nzo_id = ?",
+                    (actual_type, nzo_id),
+                )
+                await db.conn.commit()
+            except Exception:
+                logger.debug("retry_stalled: failed to correct torbox_type for %s", nzo_id)
 
         if is_cdn_available:
             # Download is complete/cached/seeding on Torbox — retry CDN download
@@ -1221,6 +1239,7 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
 
         elif torbox_status and torbox_status.lower() not in ("", "error", "failed"):
             # Still in progress on Torbox — fall back to Reannounce/Resume
+            # Use effective_type (corrected if needed) for the control command
             try:
                 dl_id = int(torbox_id)
             except (ValueError, TypeError):
@@ -1228,10 +1247,10 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
                 return JSONResponse(content={"status": True, "action": "reannounce", "torbox_status": torbox_status})
 
             try:
-                if torbox_type == "torrent":
+                if effective_type == "torrent":
                     await client.control_torrent(dl_id, "Reannounce")
                     logger.info("retry_stalled: sent Reannounce for %s (torbox_id=%s)", nzo_id, torbox_id)
-                elif torbox_type == "usenet":
+                elif effective_type == "usenet":
                     await client.control_usenet_download(dl_id, "Resume")
                     logger.info("retry_stalled: sent Resume for %s (torbox_id=%s)", nzo_id, torbox_id)
                 else:
@@ -1261,9 +1280,9 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
         # Fall back to Reannounce/Resume as best effort
         try:
             dl_id = int(torbox_id)
-            if torbox_type == "torrent":
+            if effective_type == "torrent":
                 await client.control_torrent(dl_id, "Reannounce")
-            elif torbox_type == "usenet":
+            elif effective_type == "usenet":
                 await client.control_usenet_download(dl_id, "Resume")
         except Exception:
             logger.debug("retry_stalled: fallback reannounce also failed for %s", nzo_id)
