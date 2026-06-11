@@ -383,6 +383,13 @@ async def _update_job_from_torbox(
 
         # Stall detection: check if progress has changed since last poll
         progress_changed = percentage != old_percentage
+
+        # Initialize last_progress_change for new jobs (default is 0).
+        # Without this, stall detection would never trigger because the
+        # elif condition requires last_progress_change > 0.
+        if last_progress_change == 0 and effective_status in ("Downloading", "Fetching"):
+            last_progress_change = now
+
         if progress_changed:
             last_progress_change = now
             # If progress changed, clear stall state
@@ -1052,7 +1059,8 @@ async def _reconcile_orphaned_jobs(
                     await db.conn.execute(
                         """UPDATE jobs SET
                             status = ?, percentage = ?, size = ?,
-                            sizeleft = ?, torbox_state = ?, filename = ?
+                            sizeleft = ?, torbox_state = ?, filename = ?,
+                            speed = ?, last_progress_change = ?
                         WHERE nzo_id = ?""",
                         (
                             effective_status,
@@ -1061,6 +1069,8 @@ async def _reconcile_orphaned_jobs(
                             size * (1.0 - progress) if progress < 1.0 else 0,
                             display_torbox_state,
                             dl_name,
+                            0.0,  # speed — not computed for orphaned jobs
+                            now,   # last_progress_change — initialize to now
                             nzo_id,
                         ),
                     )
@@ -1068,7 +1078,8 @@ async def _reconcile_orphaned_jobs(
                     await db.conn.execute(
                         """UPDATE jobs SET
                             status = ?, percentage = ?, size = ?,
-                            sizeleft = ?, torbox_state = ?
+                            sizeleft = ?, torbox_state = ?,
+                            speed = ?, last_progress_change = ?
                         WHERE nzo_id = ?""",
                         (
                             effective_status,
@@ -1076,6 +1087,8 @@ async def _reconcile_orphaned_jobs(
                             size,
                             size * (1.0 - progress) if progress < 1.0 else 0,
                             display_torbox_state,
+                            0.0,  # speed — not computed for orphaned jobs
+                            now,   # last_progress_change — initialize to now
                             nzo_id,
                         ),
                     )

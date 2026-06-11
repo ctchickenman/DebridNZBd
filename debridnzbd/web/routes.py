@@ -421,7 +421,7 @@ async def index(request: Request) -> HTMLResponse:
         rows = await cursor.fetchall()
         total_speed = 0
         total_sizeleft = 0
-        now = __import__("time").time()
+        now = time.time()
         for row in rows:
             status = row[2] or "Queued"
             stalled_since = row[11] or 0
