@@ -437,6 +437,7 @@ All defaults are seeded into the `config` table on first run. Key sections:
 | `base_url` | `https://api.torbox.app/v1` | Torbox API endpoint |
 | `default_type` | `usenet` | Default download type for unrecognized URLs |
 | `auto_check_cached` | `1` | Check cached availability before submitting |
+| `default_post_processing` | `-1` | Default post-processing level for Torbox downloads |
 | `download_on_complete` | `1` | Auto-download CDN files to local disk |
 | `cdn_download_concurrency` | `2` | Max simultaneous CDN downloads |
 | `poll_interval` | `5` | Seconds between Torbox state polls |
@@ -657,3 +658,4 @@ exec "$@"
 | `/data/downloads/incomplete` | debridnzbd:debridnzbd | 0755 | Active downloads |
 | `/data/downloads/complete` | debridnzbd:debridnzbd | 0755 | Completed downloads |
 | `/data/logs` | debridnzbd:debridnzbd | 0755 | Application logs |
+| `/data/scripts` | debridnzbd:debridnzbd | 0755 | Post-processing scripts |

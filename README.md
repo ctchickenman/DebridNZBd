@@ -87,7 +87,7 @@ docker compose up -d --build
 | `/data` | Database, config, logs, and internal data |
 | `/data/downloads` | Download output (incomplete + complete files) |
 
-The container uses an entrypoint script that automatically fixes `/data` ownership on startup, so named Docker volumes work without manual configuration. The container starts as root to fix permissions, then drops privileges to UID 1000 (`debridnzbd`).
+The container uses an entrypoint script that automatically fixes `/data` ownership on startup, so named Docker volumes work without manual configuration. The container starts as root to fix permissions (`chown -R`), then drops privileges to UID 1000 (`debridnzbd`) via `gosu` (with `setpriv`/`su` fallbacks). On restricted filesystems (NFS, SMB/CIFS, FAT32) where `chown` fails, the entrypoint falls back to making `/data` world-writable so the app can start.
 
 **Do not set `--user` or `user:` in Docker/Docker Compose** — this would bypass the entrypoint's privilege drop and break volume ownership handling.
 
