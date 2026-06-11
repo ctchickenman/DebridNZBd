@@ -139,23 +139,46 @@ async def lifespan(app: FastAPI):
     # umask (typically 0o755) but still allows directory listing.
     for dir_path in [DEFAULT_INCOMPLETE_DIR, DEFAULT_COMPLETE_DIR, "logs", "scripts"]:
         p = Path(dir_path)
-        if not p.exists():
-            logger.info("Creating directory: %s", dir_path)
-        p.mkdir(parents=True, exist_ok=True, mode=0o755)
+        try:
+            if not p.exists():
+                logger.info("Creating directory: %s", dir_path)
+            p.mkdir(parents=True, exist_ok=True, mode=0o755)
+        except PermissionError:
+            logger.error(
+                "Cannot create directory '%s' — permission denied. "
+                "If running in Docker, ensure the /data volume is writable by UID 1000. "
+                "Try: docker exec -u root <container> chown -R 1000:1000 /data",
+                dir_path,
+            )
+            raise
 
     # Admin directory gets restrictive permissions from creation to protect the
     # database with API keys and passwords. Using mode= in mkdir() avoids the
     # TOCTOU window between creation and chmod.
     admin_path = Path(DEFAULT_ADMIN_DIR)
-    if not admin_path.exists():
-        logger.info("Creating admin directory: %s", admin_path)
-    admin_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        if not admin_path.exists():
+            logger.info("Creating admin directory: %s", admin_path)
+        admin_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    except PermissionError:
+        logger.error(
+            "Cannot create admin directory '%s' — permission denied. "
+            "If running in Docker, ensure the /data volume is writable by UID 1000. "
+            "Try: docker exec -u root <container> chown -R 1000:1000 /data",
+            admin_path,
+        )
+        raise
     # Also chmod in case the directory already existed with wrong permissions
     try:
         os.chmod(str(admin_path), 0o700)
         logger.info("Set admin directory permissions to 0700 (owner-only): %s", admin_path)
     except OSError:
-        logger.warning("Could not set admin directory permissions (may not be supported): %s", admin_path)
+        logger.warning(
+            "Could not set admin directory permissions to 0700: %s. "
+            "This is expected on some filesystems (e.g., NFS, FAT32). "
+            "The database will still function but credentials may be readable by other users.",
+            admin_path,
+        )
 
     # --- Initialize database ---
     db_path = Path(DEFAULT_ADMIN_DIR) / "debridnzbd.db"

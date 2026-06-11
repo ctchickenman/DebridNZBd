@@ -49,6 +49,13 @@ LABEL org.opencontainers.image.title="DebridNZBd" \
       org.opencontainers.image.source="https://github.com/ctchickenman/DebridNZBd" \
       org.opencontainers.image.licenses="MIT"
 
+# Install gosu for privilege dropping in the entrypoint script.
+# gosu is a lightweight alternative to su/sudo that properly handles
+# signal forwarding and exits with the child's exit code.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gosu && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user for security.
 # Fixed UID/GID 1000:1000 matches the typical first user on Linux systems,
 # making bind-mount ownership straightforward for most users.
@@ -67,6 +74,10 @@ ENV PATH="/opt/debridnzbd/bin:${PATH}"
 # The application creates subdirectories (admin, downloads, logs, scripts)
 # at startup relative to the working directory.
 RUN mkdir -p /data && chown debridnzbd:debridnzbd /data
+
+# Copy the entrypoint script that fixes volume ownership and drops privileges.
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set the working directory to /data.
 # The app uses relative paths (admin/, downloads/incomplete/, etc.)
@@ -87,12 +98,11 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/api?mode=version')" || exit 1
 
-# Switch to the non-root user for all subsequent operations.
-USER debridnzbd
+# The entrypoint runs as root to fix /data ownership for Docker volumes,
+# then drops privileges to the debridnzbd user before executing the CMD.
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Run uvicorn directly with --host 0.0.0.0 for container networking.
-# Do NOT use the "debridnzbd" entry point — it hardcodes host=127.0.0.1
-# which is unreachable from outside the container.
 # The JSON array form ensures uvicorn runs as PID 1 for proper signal handling
 # (SIGTERM for graceful shutdown).
 # Users can override host/port/workers at docker run time:

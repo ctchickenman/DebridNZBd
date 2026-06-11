@@ -111,7 +111,16 @@ async def do_reset_password(args: argparse.Namespace) -> None:
 
     # Ensure admin directory exists with restrictive permissions
     admin_dir = db_path.parent
-    admin_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        admin_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    except PermissionError:
+        print(
+            f"Error: Cannot create directory '{admin_dir}' — permission denied.\n"
+            "If running in Docker, use: docker exec -u root <container> "
+            "chown -R 1000:1000 /data",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     try:
         os.chmod(str(admin_dir), 0o700)
     except OSError:
