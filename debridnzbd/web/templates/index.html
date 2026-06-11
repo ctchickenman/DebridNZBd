@@ -89,7 +89,9 @@
         <td class="actions">
           {% if item.stalled %}
           <button class="btn btn-sm btn-info" title="Retry stalled download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
-          {% elif item.status not in ('Complete', 'Failed', 'Fetching') %}
+          {% elif item.status == 'Fetching' %}
+          <button class="btn btn-sm btn-info" title="Retry CDN download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'CDN download retry initiated'})">↻</button>
+          {% elif item.status not in ('Complete', 'Failed') %}
           <button class="btn btn-sm btn-outline" title="Retry download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
           {% endif %}
           {% if item.status == 'Paused' %}

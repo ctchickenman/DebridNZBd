@@ -232,7 +232,18 @@ Each retry resets the stall timer, giving the download a fresh 60-second window.
 
 ### Manual Retry
 
-The `?mode=retry_stalled&nzo_id=XXX` API mode sends a Reannounce/Resume command to Torbox and resets the stall counters, giving the download another chance before automatic retry triggers. In the web UI, a Retry button (↻) is available on all active downloads (not just stalled ones) — for stalled downloads it appears as a filled blue button, for normal downloads it appears as a subtle outline button.
+The `?mode=retry_stalled&nzo_id=XXX` API mode checks Torbox availability and takes the best recovery action:
+
+1. **CDN-available** (completed/cached/seeding on Torbox): Transitions the job to `Fetching` so the CDN processor re-downloads the file. Cleans up any previous partial download.
+2. **Still in progress on Torbox** (downloading/queued): Sends Reannounce/Resume to Torbox as a fallback.
+3. **Not found on Torbox**: Returns a warning. Stall counters are still reset.
+
+In the web UI, a Retry button (↻) is available on all non-terminal downloads:
+- **Stalled** downloads: filled blue button with "Retry stalled download" tooltip
+- **Fetching** downloads: filled blue button with "Retry CDN download" tooltip
+- **Other active** downloads (Downloading, Queued, Paused): subtle outline button with "Retry download" tooltip
+
+The automatic stall retry (first attempt at 60s) also checks CDN availability before sending Reannounce.
 
 ### Speed Tracking
 

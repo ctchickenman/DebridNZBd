@@ -47,7 +47,10 @@ TORBOX_STATUS_MAP: dict[str, str] = {
 }
 
 # Torbox statuses that indicate the download is available on CDN
-COMPLETED_STATUSES = {"completed", "cached"}
+# "seeding" means the torrent is complete and being seeded — the file is
+# available for CDN download even though Torbox reports it as "seeding"
+# rather than "completed" or "cached".
+COMPLETED_STATUSES = {"completed", "cached", "seeding"}
 
 # Torbox statuses that indicate a permanent failure
 # "stalled" is included because Torbox reports it for downloads that have
@@ -122,6 +125,67 @@ def _map_torbox_status(torbox_status: str, progress: float = 0.0) -> str:
     if progress >= 1.0:
         return "Complete"
     return "Queued"
+
+
+async def check_torbox_availability(
+    client: TorboxClient,
+    torbox_id: str,
+    torbox_type: str,
+) -> tuple[str, bool, float]:
+    """Check if a download is available on Torbox CDN.
+
+    Queries Torbox for the current download status and returns whether
+    the file is available for CDN download (completed, cached, or seeding).
+
+    Args:
+        client: An authenticated TorboxClient instance.
+        torbox_id: The Torbox download ID (string form of integer).
+        torbox_type: The download type ("usenet", "torrent", or "webdl").
+
+    Returns:
+        A tuple of (torbox_status, is_cdn_available, progress) where:
+        - torbox_status: The raw status string from Torbox (e.g. "completed",
+          "downloading", "seeding"), or "" if not found.
+        - is_cdn_available: True if the file can be downloaded from CDN
+          (status is completed, cached, or seeding).
+        - progress: Download progress as a float 0.0-1.0.
+    """
+    try:
+        dl_id = int(torbox_id)
+    except (ValueError, TypeError):
+        return ("", False, 0.0)
+
+    try:
+        if torbox_type == "torrent":
+            downloads = await client.get_torrent_list(bypass_cache=True)
+            dl = next((d for d in downloads if d.id == dl_id), None)
+            if dl:
+                status_lower = (dl.status or "").lower()
+                is_available = status_lower in COMPLETED_STATUSES
+                return (dl.status or "", is_available, dl.progress or 0.0)
+
+        elif torbox_type == "usenet":
+            downloads = await client.get_usenet_list(bypass_cache=True)
+            dl = next((d for d in downloads if d.id == dl_id), None)
+            if dl:
+                status_lower = (dl.status or "").lower()
+                is_available = status_lower in COMPLETED_STATUSES
+                return (dl.status or "", is_available, dl.progress or 0.0)
+
+        elif torbox_type == "webdl":
+            downloads = await client.get_web_download_list(bypass_cache=True)
+            dl = next((d for d in downloads if d.id == dl_id), None)
+            if dl:
+                status_lower = (dl.status or "").lower()
+                is_available = status_lower in COMPLETED_STATUSES
+                return (dl.status or "", is_available, dl.progress or 0.0)
+
+    except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError):
+        logger.debug("check_torbox_availability: Torbox API error for %s:%s", torbox_type, torbox_id)
+    except Exception:
+        logger.exception("check_torbox_availability: unexpected error for %s:%s", torbox_type, torbox_id)
+
+    return ("", False, 0.0)
 
 
 async def run_state_sync(app: FastAPI, cancelled: asyncio.Event) -> None:
@@ -523,7 +587,10 @@ async def _retry_stalled_job(
 ) -> None:
     """Attempt to recover a stalled download.
 
-    For stall_retries == 1 (first attempt): try resume/reannounce on Torbox.
+    For stall_retries == 1 (first attempt):
+      - Check if the download is available on CDN (completed/cached/seeding).
+        If so, transition the job to Fetching so the CDN processor re-downloads.
+      - If not CDN-available, try resume/reannounce on Torbox.
     For stall_retries >= 2 (second attempt): delete from Torbox and re-add.
     """
     try:
@@ -533,7 +600,32 @@ async def _retry_stalled_job(
         return
 
     if stall_retries == 1:
-        # First retry: try resume/reannounce
+        # First retry: check if CDN download is available before reannounce
+        try:
+            torbox_status, is_cdn_available, progress = await check_torbox_availability(
+                client, str(torbox_id), torbox_type,
+            )
+            if is_cdn_available:
+                # CDN is available — transition to Fetching so CDN processor picks it up
+                try:
+                    await db.conn.execute(
+                        "UPDATE jobs SET status = 'Fetching', cdn_link = '', local_path = '', "
+                        "percentage = 100, sizeleft = 0 WHERE nzo_id = ?",
+                        (nzo_id,),
+                    )
+                    await db.conn.commit()
+                    logger.info(
+                        "State sync: stall recovery for %s — CDN available (torbox=%s), "
+                        "transitioning to Fetching for CDN re-download",
+                        nzo_id, torbox_status,
+                    )
+                    return
+                except Exception:
+                    logger.exception("State sync: failed to set %s to Fetching", nzo_id)
+        except Exception:
+            logger.debug("State sync: CDN availability check failed for %s, falling back to reannounce", nzo_id)
+
+        # CDN not available or check failed — fall back to resume/reannounce
         try:
             if torbox_type == "torrent":
                 await client.control_torrent(dl_id, "Reannounce")
@@ -544,7 +636,6 @@ async def _retry_stalled_job(
             else:
                 # WebDL has no resume — skip directly to restart on next cycle
                 logger.info("State sync: WebDL %s cannot be resumed — will retry as restart", nzo_id)
-                # Mark stall_retries as 1 so the next cycle will try restart
                 return
         except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
             logger.warning("State sync: Torbox resume/reannounce failed for %s: %s", nzo_id, e)

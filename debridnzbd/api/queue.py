@@ -1083,18 +1083,24 @@ async def handle_resume(params: dict) -> JSONResponse:
 
 
 async def handle_retry_stalled(params: dict) -> JSONResponse:
-    """Handle ?mode=retry_stalled — manually retry a stalled download.
+    """Handle ?mode=retry_stalled — manually retry a stalled or stuck download.
 
-    Sends a resume/reannounce command to Torbox and resets the local
-    stall tracking counters so the download gets another chance before
-    automatic retry kicks in.
+    Checks Torbox to determine the best recovery action:
+    - If the download is available on CDN (completed/cached/seeding),
+      transitions the job to Fetching so the CDN processor re-downloads it.
+    - If the download is still in progress on Torbox, sends Reannounce/Resume.
+    - Always resets local stall tracking counters.
 
     Parameters:
-        nzo_id: The nzo_id of the stalled download to retry
+        nzo_id: The nzo_id of the download to retry
 
     Returns:
-        JSONResponse with status True on success, or an error message.
+        JSONResponse with status True and an "action" field indicating
+        what was done: "cdn_retry", "reannounce", "reannounce_fallback",
+        or "stall_counters_reset".
     """
+    from debridnzbd.core.state_sync import check_torbox_availability, COMPLETED_STATUSES
+
     request = params.get("request")
     db = getattr(request.app.state, "db", None) if request else None
     config = getattr(request.app.state, "config", None) if request else None
@@ -1112,9 +1118,10 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
             content={"status": False, "error": "Database not available"},
         )
 
-    # Look up the job
+    # Look up the job — fetch additional columns for CDN retry
     cursor = await db.conn.execute(
-        "SELECT torbox_id, torbox_type, stalled_since FROM jobs WHERE nzo_id = ?",
+        "SELECT torbox_id, torbox_type, stalled_since, status, "
+        "cdn_link, local_path, filename, category FROM jobs WHERE nzo_id = ?",
         (nzo_id,),
     )
     row = await cursor.fetchone()
@@ -1124,9 +1131,10 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
             content={"status": False, "error": f"Job {nzo_id} not found"},
         )
 
-    torbox_id, torbox_type, stalled_since = row
+    (torbox_id, torbox_type, stalled_since, current_status,
+     cdn_link, local_path, filename, category) = row
 
-    # Reset stall tracking counters
+    # Reset stall tracking counters always
     now = time.time()
     try:
         await db.conn.execute(
@@ -1142,15 +1150,84 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
             content={"status": False, "error": "Failed to reset stall counters"},
         )
 
-    # Send resume/reannounce to Torbox if we have a torbox_id
-    if torbox_id and torbox_type and config:
-        torbox_api_key = await config.get("torbox", "api_key")
-        base_url = await config.get("torbox", "base_url", "https://api.torbox.app/v1")
+    # If no Torbox ID or no config, we can only reset counters
+    if not torbox_id or not torbox_type or not config:
+        logger.info("retry_stalled: %s has no torbox_id/type — stall counters reset only", nzo_id)
+        return JSONResponse(content={"status": True, "action": "stall_counters_reset"})
 
-        if torbox_api_key:
-            client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+    torbox_api_key = await config.get("torbox", "api_key")
+    base_url = await config.get("torbox", "base_url", "https://api.torbox.app/v1")
+    if not torbox_api_key:
+        logger.info("retry_stalled: no Torbox API key — stall counters reset only")
+        return JSONResponse(content={"status": True, "action": "stall_counters_reset"})
+
+    client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+    try:
+        # Check if the download is available on Torbox CDN
+        torbox_status, is_cdn_available, progress = await check_torbox_availability(
+            client, str(torbox_id), torbox_type,
+        )
+
+        if is_cdn_available:
+            # Download is complete/cached/seeding on Torbox — retry CDN download
+            # Clean up any previous partial download
+            if local_path:
+                from pathlib import Path
+                try:
+                    p = Path(local_path)
+                    if p.exists():
+                        p.unlink()
+                        logger.info("retry_stalled: removed previous local file %s", local_path)
+                except Exception:
+                    logger.exception("retry_stalled: failed to remove %s", local_path)
+
+            # Also clean up .tmp_ partial files in the download directory
+            if filename:
+                download_dir = await config.get("folders", "download_dir", "downloads/incomplete")
+                from pathlib import Path as PathLib
+                tmp_pattern = f".tmp_{filename}.part"
+                for tmp_file in PathLib(download_dir).glob(f".tmp_{filename}*.part"):
+                    try:
+                        tmp_file.unlink()
+                        logger.info("retry_stalled: removed temp file %s", tmp_file)
+                    except Exception:
+                        logger.exception("retry_stalled: failed to remove temp file %s", tmp_file)
+
+            # Set job to Fetching so CDN processor picks it up and re-downloads
+            try:
+                await db.conn.execute(
+                    "UPDATE jobs SET status = 'Fetching', cdn_link = '', local_path = '', "
+                    "percentage = 100, sizeleft = 0 WHERE nzo_id = ?",
+                    (nzo_id,),
+                )
+                await db.conn.commit()
+                logger.info(
+                    "retry_stalled: %s is CDN-available (torbox=%s, progress=%.0f%%), "
+                    "transitioning to Fetching for CDN re-download",
+                    nzo_id, torbox_status, progress * 100,
+                )
+            except Exception:
+                logger.exception("retry_stalled: failed to set %s to Fetching", nzo_id)
+                return JSONResponse(
+                    status_code=500,
+                    content={"status": False, "error": "Failed to update job status"},
+                )
+
+            return JSONResponse(content={
+                "status": True,
+                "action": "cdn_retry",
+                "torbox_status": torbox_status,
+            })
+
+        elif torbox_status and torbox_status.lower() not in ("", "error", "failed"):
+            # Still in progress on Torbox — fall back to Reannounce/Resume
             try:
                 dl_id = int(torbox_id)
+            except (ValueError, TypeError):
+                logger.warning("retry_stalled: invalid torbox_id %r for %s", torbox_id, nzo_id)
+                return JSONResponse(content={"status": True, "action": "reannounce", "torbox_status": torbox_status})
+
+            try:
                 if torbox_type == "torrent":
                     await client.control_torrent(dl_id, "Reannounce")
                     logger.info("retry_stalled: sent Reannounce for %s (torbox_id=%s)", nzo_id, torbox_id)
@@ -1163,10 +1240,42 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
                 logger.warning("retry_stalled: Torbox error for %s: %s", nzo_id, e)
             except Exception:
                 logger.exception("retry_stalled: unexpected error for %s", nzo_id)
-            finally:
-                await client.close()
 
-    return JSONResponse(content={"status": True})
+            return JSONResponse(content={
+                "status": True,
+                "action": "reannounce",
+                "torbox_status": torbox_status,
+            })
+
+        else:
+            # Download not found or in error state on Torbox
+            logger.warning("retry_stalled: %s not found or errored on Torbox (status=%s)", nzo_id, torbox_status or "unknown")
+            return JSONResponse(content={
+                "status": True,
+                "action": "not_found",
+                "torbox_status": torbox_status or "unknown",
+            })
+
+    except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
+        logger.warning("retry_stalled: Torbox API error checking availability for %s: %s", nzo_id, e)
+        # Fall back to Reannounce/Resume as best effort
+        try:
+            dl_id = int(torbox_id)
+            if torbox_type == "torrent":
+                await client.control_torrent(dl_id, "Reannounce")
+            elif torbox_type == "usenet":
+                await client.control_usenet_download(dl_id, "Resume")
+        except Exception:
+            logger.debug("retry_stalled: fallback reannounce also failed for %s", nzo_id)
+        return JSONResponse(content={"status": True, "action": "reannounce_fallback"})
+    except Exception:
+        logger.exception("retry_stalled: unexpected error for %s", nzo_id)
+        return JSONResponse(
+            status_code=500,
+            content={"status": False, "error": "Unexpected error"},
+        )
+    finally:
+        await client.close()
 
 
 async def handle_delete(params: dict) -> JSONResponse:
