@@ -57,13 +57,45 @@ class Database:
         3. Enables foreign keys
         4. Runs any pending migrations
         """
-        # Ensure the parent directory exists
+        # Ensure the parent directory exists. Use try/except for exists() and
+        # mkdir() because on restricted filesystems (NFS root_squash, CIFS/SMB),
+        # a directory may exist but stat() may fail with PermissionError if the
+        # ownership couldn't be transferred. mkdir(exist_ok=True) will succeed
+        # if the directory already exists and is accessible.
         db_parent = self.db_path.parent
-        if not db_parent.exists():
-            logger.info("Creating database parent directory: %s", db_parent)
-        db_parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if not db_parent.exists():
+                logger.info("Creating database parent directory: %s", db_parent)
+        except PermissionError:
+            logger.warning(
+                "Cannot stat database parent directory '%s' — permission denied. "
+                "This may happen on restricted filesystems. Attempting to proceed.",
+                db_parent,
+            )
+        try:
+            db_parent.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            logger.error(
+                "Cannot create database parent directory '%s' — permission denied. "
+                "If running in Docker, the entrypoint should fix this. "
+                "Try: docker exec -u root <container> chmod -R a+rwX /data",
+                db_parent,
+            )
+            raise
 
-        db_exists = self.db_path.exists()
+        # Check if the database file already exists. On restricted filesystems,
+        # exists() may fail with PermissionError even though the file is
+        # accessible — fall back to assuming it doesn't exist so we attempt
+        # creation (which will fail with a clear error if truly inaccessible).
+        try:
+            db_exists = self.db_path.exists()
+        except PermissionError:
+            logger.warning(
+                "Cannot stat database file '%s' — permission denied. "
+                "Assuming it does not exist and attempting creation.",
+                self.db_path,
+            )
+            db_exists = False
         logger.info("Opening database at %s (%s)", self.db_path, "existing" if db_exists else "new")
 
         self.conn = await aiosqlite.connect(str(self.db_path))

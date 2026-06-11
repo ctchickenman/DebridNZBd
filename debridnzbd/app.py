@@ -142,12 +142,21 @@ async def lifespan(app: FastAPI):
         try:
             if not p.exists():
                 logger.info("Creating directory: %s", dir_path)
+        except PermissionError:
+            # On restricted filesystems, exists() may fail even if the
+            # directory is accessible. Try mkdir anyway.
+            logger.warning(
+                "Cannot stat directory '%s' — permission denied. "
+                "This may happen on restricted filesystems. Attempting to proceed.",
+                dir_path,
+            )
+        try:
             p.mkdir(parents=True, exist_ok=True, mode=0o755)
         except PermissionError:
             logger.error(
                 "Cannot create directory '%s' — permission denied. "
-                "If running in Docker, ensure the /data volume is writable by UID 1000. "
-                "Try: docker exec -u root <container> chown -R 1000:1000 /data",
+                "If running in Docker, the entrypoint should fix this. "
+                "Try: docker exec -u root <container> chmod -R a+rwX /data",
                 dir_path,
             )
             raise
@@ -161,14 +170,24 @@ async def lifespan(app: FastAPI):
     try:
         if not admin_path.exists():
             logger.info("Creating admin directory: %s", admin_path)
+    except PermissionError:
+        # On restricted filesystems, exists() may fail even if the directory
+        # is accessible. Try mkdir anyway — if the directory exists and is
+        # accessible, exist_ok=True will succeed.
+        logger.warning(
+            "Cannot stat admin directory '%s' — permission denied. "
+            "This may happen on restricted filesystems. Attempting to proceed.",
+            admin_path,
+        )
+    try:
         # Create with 0o755 first (permissive) so the directory is accessible
         # even if ownership couldn't be transferred. We tighten below.
         admin_path.mkdir(parents=True, exist_ok=True, mode=0o755)
     except PermissionError:
         logger.error(
             "Cannot create admin directory '%s' — permission denied. "
-            "If running in Docker, ensure the /data volume is writable by UID 1000. "
-            "Try: docker exec -u root <container> chown -R 1000:1000 /data",
+            "If running in Docker, the entrypoint should fix this. "
+            "Try: docker exec -u root <container> chmod -R a+rwX /data",
             admin_path,
         )
         raise

@@ -8,21 +8,19 @@ DATA_DIR="/data"
 # but the application runs as the debridnzbd user (UID 1000).
 if [ "$(id -u)" = "0" ]; then
     # Fix ownership of the data directory for named Docker volumes.
-    # On most filesystems (ext4, xfs, btrfs), this works correctly.
+    # On most filesystems (ext4, xfs, btrfs), chown works correctly.
     # On filesystems that don't support chown (NFS with root_squash, CIFS/SMB,
-    # FAT32), chown will fail — we log a warning and fall back to making
-    # directories world-writable so the app can function.
-    if chown -R debridnzbd:debridnzbd "$DATA_DIR" 2>/dev/null; then
-        : # Ownership fixed successfully
-    else
-        echo "WARNING: Could not chown $DATA_DIR to debridnzbd:debridnzbd." >&2
-        echo "WARNING: This is expected on filesystems that don't support Unix ownership (NFS, SMB/CIFS)." >&2
-        echo "WARNING: Making $DATA_DIR world-writable as a fallback so the app can start." >&2
-        # Make data directory writable by all users as a fallback.
-        # This is less secure but allows the app to function on restricted filesystems.
-        chmod -R a+rwX "$DATA_DIR" 2>/dev/null || true
-        chmod 777 "$DATA_DIR" 2>/dev/null || true
-    fi
+    # FAT32), chown may silently fail (exit code 0 but no ownership change).
+    # We always run chmod as a safety net so the app can start regardless.
+    chown -R debridnzbd:debridnzbd "$DATA_DIR" 2>/dev/null || true
+
+    # Always ensure the data directory is accessible, even when chown silently
+    # failed (NFS root_squash, CIFS/SMB, etc.). On normal filesystems where
+    # chown succeeded, this is a no-op since the owner already has full access.
+    # On restricted filesystems, this makes directories traversable and files
+    # writable so the app (running as UID 1000) can function.
+    chmod -R a+rwX "$DATA_DIR" 2>/dev/null || true
+    chmod 777 "$DATA_DIR" 2>/dev/null || true
 
     # Drop privileges to the debridnzbd user.
     # Try each method in order of preference:
