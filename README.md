@@ -87,7 +87,11 @@ docker compose up -d --build
 | `/data` | Database, config, logs, and internal data |
 | `/data/downloads` | Download output (incomplete + complete files) |
 
-To use a host directory for downloads, bind-mount it to `/data/downloads`. Ensure the host directory is writable by UID 1000 (the container's default user):
+The container uses an entrypoint script that automatically fixes `/data` ownership on startup, so named Docker volumes work without manual configuration. The container starts as root to fix permissions, then drops privileges to UID 1000 (`debridnzbd`).
+
+**Do not set `--user` or `user:` in Docker/Docker Compose** — this would bypass the entrypoint's privilege drop and break volume ownership handling.
+
+For host bind mounts, ensure the directory is writable by UID 1000:
 
 ```bash
 chown -R 1000:1000 /path/to/downloads

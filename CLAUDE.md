@@ -60,6 +60,15 @@ debridnzbd/
     version.py          # Version constant
 ```
 
+## Docker Deployment
+
+The Docker image uses a multi-stage build (builder + runtime) and an entrypoint script that handles volume ownership:
+
+- **Entry point**: `docker-entrypoint.sh` runs as root, fixes `/data` ownership via `chown -R debridnzbd:debridnzbd /data`, then drops privileges to UID 1000 via `gosu`
+- **User**: The app runs as `debridnzbd` (UID 1000). Do NOT set `--user` or `user:` in Docker/Docker Compose — it bypasses the entrypoint's privilege drop
+- **Volume**: `/data` holds all persistent data (database, config, downloads, logs)
+- **Ports**: 8080 (configurable via `--port`)
+
 ## Development
 
 ```bash

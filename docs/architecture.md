@@ -598,4 +598,44 @@ Test framework: pytest + pytest-asyncio + respx (for httpx mocking)
 | `test_addfile.py` | 19 | File upload type detection, NZB/torrent upload, multipart form handling |
 | `test_qbittorrent.py` | 40 | SID auth, CSRF, torrent CRUD, state mapping, filters, categories, tags, transfer, sync |
 | `test_web_auth.py` | 45 | Session CRUD, rate limiting, path classification, middleware, setup redirect, trusted networks |
-| **Total** | **317** | |
+| `test_cli.py` | 16 | CLI parser, reset-password subcommand, credential generation, validation, interactive prompt |
+| **Total** | **333** | |
+
+## Docker Deployment
+
+The Docker image uses a multi-stage build pattern:
+
+1. **Builder stage** — Installs the package and dependencies into a virtual environment at `/opt/debridnzbd`
+2. **Runtime stage** — Copies the venv into a minimal `python:3.12-slim-bookworm` image, installs `gosu` for privilege dropping
+
+### Entrypoint and Privilege Management
+
+The container starts as root via `docker-entrypoint.sh`:
+
+```bash
+#!/bin/sh
+set -e
+chown -R debridnzbd:debridnzbd /data 2>/dev/null || true
+exec gosu debridnzbd "$@"
+```
+
+1. **Fix ownership** — `chown -R debridnzbd:debridnzbd /data` ensures the named volume is writable by the application user. This handles the common case where Docker creates volumes owned by `root:root`.
+2. **Drop privileges** — `gosu debridnzbd` switches to UID 1000 before executing the CMD (uvicorn). This ensures the application never runs as root.
+3. **Execute** — `exec` replaces the shell process with the application, preserving signal handling (SIGTERM for graceful shutdown).
+
+### Important Notes
+
+- **Do not set `--user` or `user:` in Docker/Docker Compose** — this would prevent the entrypoint from running as root, breaking the ownership fix and privilege drop.
+- **Host bind mounts** — For host directories bind-mounted to `/data` or `/data/downloads`, ensure they are writable by UID 1000 (`chown -R 1000:1000 /path/to/dir`).
+- **Named volumes** — Work automatically; the entrypoint fixes ownership on every container start.
+
+### Directory Structure
+
+| Path | Owner | Permissions | Purpose |
+|------|-------|-------------|---------|
+| `/data` | debridnzbd:debridnzbd | 0755 | Base data directory |
+| `/data/admin` | debridnzbd:debridnzbd | 0700 | Database and config (owner-only) |
+| `/data/admin/debridnzbd.db` | debridnzbd:debridnzbd | 0600 | SQLite database (owner-only) |
+| `/data/downloads/incomplete` | debridnzbd:debridnzbd | 0755 | Active downloads |
+| `/data/downloads/complete` | debridnzbd:debridnzbd | 0755 | Completed downloads |
+| `/data/logs` | debridnzbd:debridnzbd | 0755 | Application logs |
