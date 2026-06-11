@@ -71,7 +71,7 @@
     </thead>
     <tbody>
     {% for item in queue_items %}
-      <tr>
+      <tr{% if item.stalled %} class="stalled-row"{% endif %}>
         <td><strong>{{ item.filename }}</strong></td>
         <td>
           <span class="badge badge-{{ item.status_label }}">{{ item.status }}</span>
@@ -84,10 +84,12 @@
           {{ item.percentage }}%
         </td>
         <td>{{ item.size }}</td>
-        <td>{{ item.speed }}</td>
+        <td>{% if item.stalled %}<span class="stalled-indicator">Stalled {{ item.stall_duration }}</span>{% else %}{{ item.speed }}{% endif %}</td>
         <td>{{ item.timeleft }}</td>
         <td class="actions">
-          {% if item.status == 'Paused' %}
+          {% if item.stalled %}
+          <button class="btn btn-sm btn-info" title="Retry" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
+          {% elif item.status == 'Paused' %}
           <button class="btn btn-sm btn-success" title="Resume" onclick="apiAction('resume', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Resumed'})">▶</button>
           {% else %}
           <button class="btn btn-sm btn-warning" title="Pause" onclick="apiAction('pause', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Paused'})">⏸</button>

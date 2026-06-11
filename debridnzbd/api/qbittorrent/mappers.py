@@ -30,12 +30,15 @@ _STATUS_TO_QBIT: dict[str, str] = {
 }
 
 
-def debrid_status_to_qbit(status: str, speed: float = 0.0) -> str:
+def debrid_status_to_qbit(status: str, speed: float = 0.0, stalled_since: float = 0) -> str:
     """Convert DebridNZBd job status to qBittorrent torrent state.
 
-    For "Downloading" status, uses speed to distinguish between
-    "downloading" (active) and "stalledDL" (no progress).
+    For "Downloading" or "Fetching" status, uses stalled_since and speed
+    to distinguish between "downloading" (active) and "stalledDL" (no progress).
+    Jobs with stalled_since > 0 are considered stalled regardless of speed.
     """
+    if stalled_since > 0 and status in ("Downloading", "Fetching"):
+        return "stalledDL"
     if status == "Downloading" and speed <= 0:
         return "stalledDL"
     return _STATUS_TO_QBIT.get(status, "queuedDL")
@@ -71,17 +74,21 @@ def build_torrent_info(
     """Build a qBittorrent torrent info dict from a database row.
 
     The row tuple should follow the column order from the jobs table
-    query in the torrents/info endpoint.
+    query in the torrents/info endpoint. Expected columns:
+    nzo_id, filename, nzo_url, category, priority, status,
+    size, sizeleft, percentage, time_added, time_completed,
+    torbox_id, torbox_type, torbox_hash, speed, tags, position,
+    stalled_since
     """
     (
         nzo_id, filename, nzo_url, category, priority, status,
         size, sizeleft, percentage, time_added, time_completed,
         torbox_id, torbox_type_val, torbox_hash, speed, tags,
-        position,
+        position, stalled_since,
     ) = row
 
     info_hash = get_torrent_hash(torbox_hash or "", nzo_id, torbox_type_val)
-    qbit_state = debrid_status_to_qbit(status, speed)
+    qbit_state = debrid_status_to_qbit(status, speed, stalled_since or 0)
     dloaded = size - sizeleft
     progress = percentage / 100.0 if percentage else 0.0
 

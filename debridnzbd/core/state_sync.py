@@ -50,7 +50,14 @@ TORBOX_STATUS_MAP: dict[str, str] = {
 COMPLETED_STATUSES = {"completed", "cached"}
 
 # Torbox statuses that indicate a permanent failure
-FAILED_STATUSES = {"error", "failed"}
+# "stalled" is included because Torbox reports it for downloads that have
+# permanently stalled on their end — we move them to history like other failures.
+# Local stall detection (no progress for 60+ seconds) is tracked separately
+# via the stalled_since column and does NOT use this set.
+FAILED_STATUSES = {"error", "failed", "stalled"}
+
+# Stall detection threshold: seconds without progress before considering a download stalled
+STALL_THRESHOLD_SECONDS = 60
 
 
 def _extract_download_name(dl, url_type: str) -> str | None:
@@ -193,32 +200,47 @@ async def _sync_all_downloads(
         return
 
     # Fetch ALL local jobs (not just those with torbox_id) so we can
-    # match orphaned jobs by URL in the second pass.
+    # match orphaned jobs by URL in the second pass. Also fetch stall
+    # tracking columns for stall detection logic.
     cursor = await db.conn.execute(
-        "SELECT nzo_id, torbox_id, torbox_type, status, nzo_url, filename FROM jobs"
+        "SELECT nzo_id, torbox_id, torbox_type, status, nzo_url, filename, "
+        "percentage, sizeleft, last_progress_change, stalled_since, stall_retries, "
+        "category, priority FROM jobs"
     )
     all_jobs = await cursor.fetchall()
 
     if not all_jobs:
         return  # No jobs to sync
 
-    # Build a lookup: (torbox_id, torbox_type) → list of (nzo_id, current_status)
-    # for jobs that have a torbox_id.
-    jobs_by_key: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    # Build a lookup: (torbox_id, torbox_type) → list of job tuples
+    # for jobs that have a torbox_id. Each tuple now includes stall data.
+    # Format: (nzo_id, status, percentage, sizeleft,
+    #          last_progress_change, stalled_since, stall_retries,
+    #          nzo_url, category, priority, torbox_type)
+    jobs_by_key: dict[tuple[str, str], list[tuple]] = {}
     # Collect orphaned jobs (no torbox_id) for URL-based fallback matching.
     orphaned_jobs: list[tuple[str, str, str]] = []  # (nzo_id, nzo_url, torbox_type)
 
     for row in all_jobs:
-        nzo_id, torbox_id, torbox_type, status, nzo_url, filename = row
+        (nzo_id, torbox_id, torbox_type, status, nzo_url, filename,
+         percentage, sizeleft, last_progress_change, stalled_since,
+         stall_retries, category, priority) = row
         if torbox_id and torbox_type:
             key = (str(torbox_id), torbox_type)
-            jobs_by_key.setdefault(key, []).append((nzo_id, status))
+            jobs_by_key.setdefault(key, []).append((
+                nzo_id, status, percentage or 0, sizeleft or 0,
+                last_progress_change or 0, stalled_since or 0,
+                stall_retries or 0, nzo_url or "", category or "*",
+                priority or 0, torbox_type,
+            ))
         else:
             # Orphaned — no torbox_id yet.  Try to reconcile by URL later.
             url = nzo_url or ""
             if url or filename:
                 orphaned_jobs.append((nzo_id, url, torbox_type or "usenet"))
 
+    # Get poll interval for speed calculation
+    poll_interval = int(await config.get("torbox", "poll_interval", "5"))
     now = time.time()
 
     # Fetch each download type independently
@@ -252,21 +274,24 @@ async def _sync_all_downloads(
         dl_name = _extract_download_name(dl, "usenet")
         await _update_job_from_torbox(
             db, client, str(dl.id), "usenet", dl.status, dl.progress, dl.size,
-            jobs_by_key, config, download_on_complete, semaphore, now, download_name=dl_name,
+            jobs_by_key, config, download_on_complete, semaphore, now,
+            poll_interval, download_name=dl_name,
         )
 
     for dl in torrent_downloads:
         dl_name = _extract_download_name(dl, "torrent")
         await _update_job_from_torbox(
             db, client, str(dl.id), "torrent", dl.status, dl.progress, dl.size,
-            jobs_by_key, config, download_on_complete, semaphore, now, download_name=dl_name,
+            jobs_by_key, config, download_on_complete, semaphore, now,
+            poll_interval, download_name=dl_name,
         )
 
     for dl in web_downloads:
         dl_name = _extract_download_name(dl, "webdl")
         await _update_job_from_torbox(
             db, client, str(dl.id), "webdl", dl.status, dl.progress, dl.size,
-            jobs_by_key, config, download_on_complete, semaphore, now, download_name=dl_name,
+            jobs_by_key, config, download_on_complete, semaphore, now,
+            poll_interval, download_name=dl_name,
         )
 
     # Pass 2: reconcile orphaned jobs by matching their URL against
@@ -289,11 +314,12 @@ async def _update_job_from_torbox(
     torbox_status: str,
     progress: float,
     size: float,
-    jobs_by_key: dict[tuple[str, str], list[tuple[str, str]]],
+    jobs_by_key: dict[tuple[str, str], list[tuple]],
     config: object,
     download_on_complete: bool,
     semaphore: asyncio.Semaphore,
     now: float,
+    poll_interval: int = 5,
     download_name: str | None = None,
 ) -> None:
     """Update local jobs matching a Torbox download.
@@ -302,7 +328,15 @@ async def _update_job_from_torbox(
     their status, progress, size, and optionally filename. For completed
     downloads, requests the CDN link and moves the job to history.
 
+    Also tracks download speed from sizeleft changes and detects stalled
+    downloads (no progress for 60+ seconds), triggering automatic retries.
+
     Args:
+        jobs_by_key: Maps (torbox_id, torbox_type) to list of job tuples:
+            (nzo_id, status, percentage, sizeleft,
+             last_progress_change, stalled_since, stall_retries,
+             nzo_url, category, priority, torbox_type)
+        poll_interval: Seconds between poll cycles (used for speed calc).
         download_name: If provided, update the job's filename to this
             value. Used to replace URL-derived placeholder names with
             the real NZB/torrent name from Torbox.
@@ -328,12 +362,73 @@ async def _update_job_from_torbox(
     )
     effective_status = "Fetching" if (is_completed and download_on_complete) else local_status
 
-    for nzo_id, current_status in matching_jobs:
+    new_sizeleft = size * (1.0 - progress) if progress < 1.0 else 0
+
+    for job_tuple in matching_jobs:
+        (nzo_id, current_status, old_percentage, old_sizeleft,
+         last_progress_change, stalled_since, stall_retries,
+         nzo_url, category, priority, job_torbox_type) = job_tuple
+
         # Skip if job is already in a final state, being fetched from CDN,
         # or locally paused (the qBittorrent API sets local Paused status
         # that the poller should not overwrite with Torbox's reported status).
         if current_status in ("Complete", "Failed", "Fetching", "Paused"):
             continue
+
+        # Compute download speed from sizeleft delta
+        # Speed = bytes downloaded per second = (old_sizeleft - new_sizeleft) / poll_interval
+        speed = 0.0
+        if old_sizeleft > 0 and new_sizeleft < old_sizeleft and poll_interval > 0:
+            speed = max(0.0, (old_sizeleft - new_sizeleft) / poll_interval)
+
+        # Stall detection: check if progress has changed since last poll
+        progress_changed = percentage != old_percentage
+        if progress_changed:
+            last_progress_change = now
+            # If progress changed, clear stall state
+            stalled_since = 0.0
+            stall_retries = 0
+        elif effective_status in ("Downloading", "Fetching") and last_progress_change > 0:
+            # No progress — check if we've been stalled long enough
+            stall_duration = now - last_progress_change
+            if stall_duration >= STALL_THRESHOLD_SECONDS:
+                # Stall detected — determine retry action
+                if stall_retries == 0:
+                    # First stall detection: try resume/reannounce
+                    stalled_since = now if stalled_since == 0 else stalled_since
+                    stall_retries = 1
+                    last_progress_change = now  # Reset to give another window
+                    logger.info(
+                        "State sync: stall detected for %s (no progress for %ds), "
+                        "attempting resume (attempt 1)",
+                        nzo_id, int(stall_duration),
+                    )
+                    await _retry_stalled_job(
+                        db, client, nzo_id, torbox_id, torbox_type,
+                        stall_retries, nzo_url, category, priority, config,
+                    )
+                elif stall_retries == 1:
+                    # Second stall: try restart (delete + re-add)
+                    stall_retries = 2
+                    last_progress_change = now  # Reset to give another window
+                    logger.info(
+                        "State sync: stall persists for %s after resume attempt, "
+                        "attempting restart (attempt 2)",
+                        nzo_id,
+                    )
+                    await _retry_stalled_job(
+                        db, client, nzo_id, torbox_id, torbox_type,
+                        stall_retries, nzo_url, category, priority, config,
+                    )
+                elif stall_retries >= 2:
+                    # Third stall: give up, mark as failed
+                    logger.warning(
+                        "State sync: giving up on %s after %d retry attempts — "
+                        "marking as failed",
+                        nzo_id, stall_retries,
+                    )
+                    await _fail_job(db, nzo_id, "stalled", now)
+                    continue
 
         try:
             # Update filename if we have a real name from Torbox
@@ -341,15 +436,21 @@ async def _update_job_from_torbox(
                 await db.conn.execute(
                     """UPDATE jobs SET
                         status = ?, percentage = ?, size = ?,
-                        sizeleft = ?, torbox_state = ?, filename = ?
+                        sizeleft = ?, torbox_state = ?, filename = ?,
+                        speed = ?, last_progress_change = ?,
+                        stalled_since = ?, stall_retries = ?
                     WHERE nzo_id = ?""",
                     (
                         effective_status,
                         percentage,
                         size,
-                        size * (1.0 - progress) if progress < 1.0 else 0,
+                        new_sizeleft,
                         display_torbox_state,
                         download_name,
+                        speed,
+                        last_progress_change,
+                        stalled_since,
+                        stall_retries,
                         nzo_id,
                     ),
                 )
@@ -357,14 +458,20 @@ async def _update_job_from_torbox(
                 await db.conn.execute(
                     """UPDATE jobs SET
                         status = ?, percentage = ?, size = ?,
-                        sizeleft = ?, torbox_state = ?
+                        sizeleft = ?, torbox_state = ?,
+                        speed = ?, last_progress_change = ?,
+                        stalled_since = ?, stall_retries = ?
                     WHERE nzo_id = ?""",
                     (
                         effective_status,
                         percentage,
                         size,
-                        size * (1.0 - progress) if progress < 1.0 else 0,
+                        new_sizeleft,
                         display_torbox_state,
+                        speed,
+                        last_progress_change,
+                        stalled_since,
+                        stall_retries,
                         nzo_id,
                     ),
                 )
@@ -374,8 +481,8 @@ async def _update_job_from_torbox(
             continue
 
         logger.debug(
-            "State sync: updated %s → %s (%s%%, torbox=%s)",
-            nzo_id, effective_status, percentage, torbox_status,
+            "State sync: updated %s → %s (%s%%, torbox=%s, speed=%s)",
+            nzo_id, effective_status, percentage, torbox_status, format_speed_value(speed),
         )
 
         # Handle failure — move to history
@@ -383,6 +490,216 @@ async def _update_job_from_torbox(
         # jobs with status "Fetching" and downloads from CDN asynchronously.
         if torbox_status.lower() in FAILED_STATUSES:
             await _fail_job(db, nzo_id, torbox_status, now)
+
+
+def format_speed_value(speed: float) -> str:
+    """Format a speed value in bytes/s to a human-readable string."""
+    if speed <= 0:
+        return "0 B/s"
+    for unit, threshold in [("GB/s", 1_000_000_000), ("MB/s", 1_000_000), ("KB/s", 1_000)]:
+        if speed >= threshold:
+            return f"{speed / threshold:.1f} {unit}"
+    return f"{speed:.0f} B/s"
+
+
+async def _retry_stalled_job(
+    db: object,
+    client: TorboxClient,
+    nzo_id: str,
+    torbox_id: str,
+    torbox_type: str,
+    stall_retries: int,
+    nzo_url: str,
+    category: str,
+    priority: int,
+    config: object,
+) -> None:
+    """Attempt to recover a stalled download.
+
+    For stall_retries == 1 (first attempt): try resume/reannounce on Torbox.
+    For stall_retries >= 2 (second attempt): delete from Torbox and re-add.
+    """
+    try:
+        dl_id = int(torbox_id)
+    except (ValueError, TypeError):
+        logger.warning("State sync: cannot retry %s — invalid torbox_id %r", nzo_id, torbox_id)
+        return
+
+    if stall_retries == 1:
+        # First retry: try resume/reannounce
+        try:
+            if torbox_type == "torrent":
+                await client.control_torrent(dl_id, "Reannounce")
+                logger.info("State sync: sent Reannounce for stalled torrent %s (torbox_id=%s)", nzo_id, torbox_id)
+            elif torbox_type == "usenet":
+                await client.control_usenet_download(dl_id, "Resume")
+                logger.info("State sync: sent Resume for stalled usenet %s (torbox_id=%s)", nzo_id, torbox_id)
+            else:
+                # WebDL has no resume — skip directly to restart on next cycle
+                logger.info("State sync: WebDL %s cannot be resumed — will retry as restart", nzo_id)
+                # Mark stall_retries as 1 so the next cycle will try restart
+                return
+        except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
+            logger.warning("State sync: Torbox resume/reannounce failed for %s: %s", nzo_id, e)
+        except Exception:
+            logger.exception("State sync: unexpected error retrying %s", nzo_id)
+
+    elif stall_retries >= 2:
+        # Second retry: delete and re-add
+        if not nzo_url:
+            logger.warning("State sync: cannot restart %s — no nzo_url stored", nzo_id)
+            return
+
+        # Delete from Torbox
+        try:
+            if torbox_type == "torrent":
+                await client.control_torrent(dl_id, "Delete")
+            elif torbox_type == "usenet":
+                await client.control_usenet_download(dl_id, "Delete")
+            elif torbox_type == "webdl":
+                await client.control_web_download(dl_id, "Delete")
+            logger.info("State sync: deleted stalled %s from Torbox (torbox_id=%s)", nzo_id, torbox_id)
+        except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
+            logger.warning("State sync: failed to delete %s from Torbox: %s", nzo_id, e)
+            return
+        except Exception:
+            logger.exception("State sync: unexpected error deleting %s from Torbox", nzo_id)
+            return
+
+        # Delete from local database
+        try:
+            await db.conn.execute("DELETE FROM jobs WHERE nzo_id = ?", (nzo_id,))
+            await db.conn.commit()
+            logger.info("State sync: deleted stalled job %s from local DB", nzo_id)
+        except Exception:
+            logger.exception("State sync: failed to delete job %s from local DB", nzo_id)
+            return
+
+        # Re-submit via resubmit helper
+        await _resubmit_job(nzo_url, torbox_type, category, priority, config, db)
+
+
+async def _resubmit_job(
+    url: str,
+    url_type: str,
+    category: str,
+    priority: int,
+    config: object,
+    db: object,
+) -> None:
+    """Re-submit a download URL to Torbox and create a new local job.
+
+    This is used by the stall retry system to restart downloads that couldn't
+    be recovered by resume/reannounce. It mirrors the core logic of handle_addurl
+    but without the HTTP request/response handling.
+    """
+    from debridnzbd.utils.nzo_id import generate_nzo_id
+    from debridnzbd.api.queue import detect_url_type
+
+    nzo_id = generate_nzo_id()
+    logger.info("State sync: resubmitting %s download as new job %s (url=%s)", url_type, nzo_id, url[:100])
+
+    # Get Torbox config
+    torbox_api_key = await config.get("torbox", "api_key")
+    if not torbox_api_key:
+        logger.error("State sync: no Torbox API key configured, cannot resubmit %s", nzo_id)
+        return
+
+    base_url = await config.get("torbox", "base_url", "https://api.torbox.app/v1")
+    resubmit_client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+
+    try:
+        # Detect URL type if not specified
+        if url_type not in ("usenet", "torrent", "webdl"):
+            url_type = detect_url_type(url, await config.get("torbox", "default_type", "usenet"))
+
+        # Submit to Torbox
+        torbox_id = None
+        torbox_hash = ""
+
+        try:
+            if url_type == "torrent":
+                result = await resubmit_client.create_torrent(magnet=url)
+            elif url_type == "webdl":
+                result = await resubmit_client.create_web_download(link=url)
+            else:
+                result = await resubmit_client.create_usenet_download(link=url)
+
+            if result.success:
+                data = result.data
+                if isinstance(data, int) and not isinstance(data, bool):
+                    torbox_id = data
+                elif isinstance(data, str) and data.strip().isdigit():
+                    torbox_id = int(data.strip())
+                elif isinstance(data, dict):
+                    raw_id = (
+                        data.get("usenet_id")
+                        or data.get("torrent_id")
+                        or data.get("web_id")
+                        or data.get("id")
+                    )
+                    if raw_id is not None:
+                        try:
+                            torbox_id = int(raw_id) if isinstance(raw_id, str) else int(raw_id)
+                        except (ValueError, TypeError):
+                            logger.warning("State sync: could not parse torbox_id from %r", raw_id)
+                    torbox_hash = data.get("hash", "")
+            else:
+                logger.warning(
+                    "State sync: Torbox rejected resubmit for %s: %s",
+                    nzo_id, result.detail or "Unknown error",
+                )
+                return
+        except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
+            logger.warning("State sync: Torbox error resubmitting %s: %s", nzo_id, e)
+            return
+
+        # Insert new job into database
+        now = time.time()
+        try:
+            cursor = await db.conn.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM jobs")
+            row = await cursor.fetchone()
+            position = row[0] if row else 0
+        except Exception:
+            position = 0
+
+        try:
+            await db.conn.execute(
+                """INSERT INTO jobs (
+                    nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                    status, size, sizeleft, percentage, time_added, avg_age,
+                    torbox_id, torbox_type, torbox_hash, position, torbox_state
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    nzo_id,
+                    url.split("/")[-1].split("?")[0] or url[:50],  # Filename from URL
+                    "",  # password
+                    url,
+                    category or "*",
+                    "Default",  # script
+                    priority or 0,
+                    -1,  # pp
+                    "Queued",
+                    0, 0, 0,  # size, sizeleft, percentage
+                    now,  # time_added
+                    "",  # avg_age
+                    str(torbox_id) if torbox_id else None,
+                    url_type,
+                    torbox_hash,
+                    position,
+                    "queued",  # initial torbox_state
+                ),
+            )
+            await db.conn.commit()
+            logger.info(
+                "State sync: resubmitted job %s (torbox_id=%s, type=%s)",
+                nzo_id, torbox_id, url_type,
+            )
+        except Exception:
+            logger.exception("State sync: failed to insert resubmitted job %s", nzo_id)
+
+    finally:
+        await resubmit_client.close()
 
 
 async def _complete_job(
@@ -543,7 +860,7 @@ async def _reconcile_orphaned_jobs(
     usenet_downloads: list,
     torrent_downloads: list,
     web_downloads: list,
-    jobs_by_key: dict[tuple[str, str], list[tuple[str, str]]],
+    jobs_by_key: dict[tuple[str, str], list[tuple]],
     config: object,
     download_on_complete: bool,
     semaphore: asyncio.Semaphore,

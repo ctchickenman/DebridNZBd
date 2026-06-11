@@ -192,6 +192,17 @@ body {
 .badge-complete { background: rgba(39, 174, 96, 0.2); color: #27ae60; }
 .badge-failed { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
 .badge-fetching { background: rgba(155, 89, 182, 0.2); color: #9b59b6; }
+.badge-stalled { background: rgba(243, 156, 18, 0.25); color: #e67e22; }
+
+/* Stalled download indicator */
+.stalled-indicator {
+  color: #e67e22;
+  font-weight: 600;
+  font-size: 12px;
+}
+.stalled-row {
+  background: rgba(243, 156, 18, 0.05);
+}
 
 /* Type Badges (Provider page) */
 .badge-usenet { background: rgba(155, 89, 182, 0.2); color: #9b59b6; }
@@ -340,6 +351,8 @@ body {
 .btn-warning:hover { background: #e67e22; }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { background: #c0392b; }
+.btn-info { background: #3498db; color: #fff; }
+.btn-info:hover { background: #2980b9; }
 .btn-secondary { background: #555; color: #fff; }
 .btn-secondary:hover { background: #444; }
 .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-light); }

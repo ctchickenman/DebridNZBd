@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Current schema version — used to determine which migrations to run.
 # Increment this when adding new migrations.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class Database:
@@ -422,6 +422,44 @@ class Database:
         )
         await self.conn.commit()
         logger.info("Migration 003: Ensured idx_jobs_torbox_hash index exists")
+
+    async def _migration_004(self) -> None:
+        """Add stall tracking columns to jobs table.
+
+        Adds three columns used by the stalled-download detection system:
+        - last_progress_change: timestamp of when percentage last changed
+        - stalled_since: timestamp when a stall was first detected (0 = not stalled)
+        - stall_retries: number of automatic retry attempts made
+        """
+        cursor = await self.conn.execute("PRAGMA table_info(jobs)")
+        columns = [row[1] for row in await cursor.fetchall()]
+
+        if "last_progress_change" not in columns:
+            await self.conn.execute(
+                "ALTER TABLE jobs ADD COLUMN last_progress_change REAL DEFAULT 0"
+            )
+            await self.conn.commit()
+            logger.info("Migration 004: Added last_progress_change column to jobs table")
+        else:
+            logger.info("Migration 004: last_progress_change column already exists, skipping")
+
+        if "stalled_since" not in columns:
+            await self.conn.execute(
+                "ALTER TABLE jobs ADD COLUMN stalled_since REAL DEFAULT 0"
+            )
+            await self.conn.commit()
+            logger.info("Migration 004: Added stalled_since column to jobs table")
+        else:
+            logger.info("Migration 004: stalled_since column already exists, skipping")
+
+        if "stall_retries" not in columns:
+            await self.conn.execute(
+                "ALTER TABLE jobs ADD COLUMN stall_retries INTEGER DEFAULT 0"
+            )
+            await self.conn.commit()
+            logger.info("Migration 004: Added stall_retries column to jobs table")
+        else:
+            logger.info("Migration 004: stall_retries column already exists, skipping")
 
 
 # ------------------------------------------------------------------ #

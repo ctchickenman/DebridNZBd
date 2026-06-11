@@ -883,7 +883,8 @@ async def handle_queue(params: dict) -> JSONResponse:
         "SELECT nzo_id, filename, password, nzo_url, category, script, priority, pp, "
         "status, size, sizeleft, percentage, time_added, avg_age, "
         "torbox_id, torbox_type, torbox_hash, torbox_state, cdn_link, "
-        "local_path, position, labels, stage_log, fail_message, speed, download_time "
+        "local_path, position, labels, stage_log, fail_message, speed, download_time, "
+        "stalled_since "
         "FROM jobs WHERE torbox_type = 'usenet' ORDER BY position"
     )
     rows = await cursor.fetchall()
@@ -893,6 +894,7 @@ async def handle_queue(params: dict) -> JSONResponse:
     total_speed = 0.0
     total_size = 0.0
     total_sizeleft = 0.0
+    now = time.time()
 
     for row in rows:
         nzo_id = row[0]
@@ -907,6 +909,7 @@ async def handle_queue(params: dict) -> JSONResponse:
         time_added = row[12] or 0
         avg_age = row[13] or ""
         speed = row[24] or 0
+        stalled_since = row[26] or 0
 
         total_speed += speed
         total_size += size
@@ -920,6 +923,16 @@ async def handle_queue(params: dict) -> JSONResponse:
             timeleft = format_timeleft(sizeleft / speed)
         else:
             timeleft = "0:00:00"
+
+        # Compute stall state
+        stalled = stalled_since > 0
+        if stalled and stalled_since > 0:
+            elapsed = now - stalled_since
+            minutes = int(elapsed) // 60
+            seconds = int(elapsed) % 60
+            stall_duration = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+        else:
+            stall_duration = ""
 
         slots.append(QueueSlot(
             status=status,
@@ -941,6 +954,8 @@ async def handle_queue(params: dict) -> JSONResponse:
             percentage=str(int(percentage)),
             nzo_id=nzo_id,
             unpackopts="",
+            stalled=stalled,
+            stall_duration=stall_duration,
         ))
 
     # Apply pagination
@@ -1063,6 +1078,93 @@ async def handle_resume(params: dict) -> JSONResponse:
                 logger.info("resume: resumed %d job(s)", cursor.rowcount)
         except Exception:
             logger.exception("resume: failed to update jobs")
+
+    return JSONResponse(content={"status": True})
+
+
+async def handle_retry_stalled(params: dict) -> JSONResponse:
+    """Handle ?mode=retry_stalled — manually retry a stalled download.
+
+    Sends a resume/reannounce command to Torbox and resets the local
+    stall tracking counters so the download gets another chance before
+    automatic retry kicks in.
+
+    Parameters:
+        nzo_id: The nzo_id of the stalled download to retry
+
+    Returns:
+        JSONResponse with status True on success, or an error message.
+    """
+    request = params.get("request")
+    db = getattr(request.app.state, "db", None) if request else None
+    config = getattr(request.app.state, "config", None) if request else None
+
+    nzo_id = params.get("nzo_id") or ""
+    if not nzo_id:
+        return JSONResponse(
+            status_code=400,
+            content={"status": False, "error": "No nzo_id provided"},
+        )
+
+    if db is None or db.conn is None:
+        return JSONResponse(
+            status_code=500,
+            content={"status": False, "error": "Database not available"},
+        )
+
+    # Look up the job
+    cursor = await db.conn.execute(
+        "SELECT torbox_id, torbox_type, stalled_since FROM jobs WHERE nzo_id = ?",
+        (nzo_id,),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return JSONResponse(
+            status_code=404,
+            content={"status": False, "error": f"Job {nzo_id} not found"},
+        )
+
+    torbox_id, torbox_type, stalled_since = row
+
+    # Reset stall tracking counters
+    now = time.time()
+    try:
+        await db.conn.execute(
+            "UPDATE jobs SET stalled_since = 0, last_progress_change = ?, "
+            "stall_retries = 0 WHERE nzo_id = ?",
+            (now, nzo_id),
+        )
+        await db.conn.commit()
+    except Exception:
+        logger.exception("retry_stalled: failed to reset stall counters for %s", nzo_id)
+        return JSONResponse(
+            status_code=500,
+            content={"status": False, "error": "Failed to reset stall counters"},
+        )
+
+    # Send resume/reannounce to Torbox if we have a torbox_id
+    if torbox_id and torbox_type and config:
+        torbox_api_key = await config.get("torbox", "api_key")
+        base_url = await config.get("torbox", "base_url", "https://api.torbox.app/v1")
+
+        if torbox_api_key:
+            client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+            try:
+                dl_id = int(torbox_id)
+                if torbox_type == "torrent":
+                    await client.control_torrent(dl_id, "Reannounce")
+                    logger.info("retry_stalled: sent Reannounce for %s (torbox_id=%s)", nzo_id, torbox_id)
+                elif torbox_type == "usenet":
+                    await client.control_usenet_download(dl_id, "Resume")
+                    logger.info("retry_stalled: sent Resume for %s (torbox_id=%s)", nzo_id, torbox_id)
+                else:
+                    logger.info("retry_stalled: WebDL %s has no resume command — stall counters reset", nzo_id)
+            except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
+                logger.warning("retry_stalled: Torbox error for %s: %s", nzo_id, e)
+            except Exception:
+                logger.exception("retry_stalled: unexpected error for %s", nzo_id)
+            finally:
+                await client.close()
 
     return JSONResponse(content={"status": True})
 

@@ -31,6 +31,7 @@ from debridnzbd.api.queue import (
     handle_queue,
     handle_pause,
     handle_resume,
+    handle_retry_stalled,
     handle_delete,
     handle_purge,
     handle_switch,
@@ -231,6 +232,7 @@ MODE_HANDLERS: dict[str, callable] = {
     "change_cat": handle_change_cat,
     "priority": handle_priority,
     "speedlimit": handle_speedlimit,
+    "retry_stalled": handle_retry_stalled,
     # History modes
     "history": handle_history,
     "retry": handle_retry,

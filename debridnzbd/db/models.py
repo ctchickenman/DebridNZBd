@@ -76,6 +76,8 @@ class QueueSlot(BaseModel):
     percentage: str = "0"
     nzo_id: str = ""
     unpackopts: str = ""
+    stalled: bool = False
+    stall_duration: str = ""
 
     @field_serializer("password")
     @classmethod

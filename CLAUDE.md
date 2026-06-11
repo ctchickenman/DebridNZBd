@@ -91,7 +91,7 @@ with `Torbox` configuration for the debrid service.
 
 ### Key API Modes
 
-- **Queue:** `addurl`, `addfile`, `queue`, `pause`, `resume`, `delete`, `purge`, `switch`, `change_cat`, `priority`
+- **Queue:** `addurl`, `addfile`, `queue`, `pause`, `resume`, `delete`, `purge`, `switch`, `change_cat`, `priority`, `retry_stalled`
 - **History:** `history`, `retry`, `retry_all`
 - **Status:** `status`, `fullstatus`, `warnings`, `server_stats`
 - **Config:** `get_config`, `set_config`, `del_config`, `get_cats`, `get_scripts`, `speedlimit`
@@ -140,6 +140,7 @@ Referer/Origin header matching on mutating requests.
 | Queued | `queuedDL` | |
 | Downloading (speed > 0) | `downloading` | |
 | Downloading (speed = 0) | `stalledDL` | |
+| Stalled (locally detected) | `stalledDL` | No progress for 60+ seconds |
 | Paused | `pausedDL` | Local-only; Torbox doesn't support pause |
 | Fetching | `moving` | CDN download in progress |
 | Complete | `uploading` | qBittorrent convention for seeding |
@@ -207,6 +208,35 @@ When no `misc.username`/`misc.password` are configured on first launch:
 - `GET /setup` — Setup wizard page (requires valid session)
 - `POST /setup` — Complete setup wizard, set permanent credentials
 - `GET/POST /logout` — Destroy session
+
+## Stalled Download Retry
+
+Downloads can stall when no progress is made for an extended period while Torbox reports the download as active. DebridNZBd detects and automatically recovers from stalls.
+
+### Stall Detection
+
+The background state sync poller tracks when each job's `percentage` last changed:
+- If `percentage` is unchanged for 60+ seconds while status is "Downloading" or "Fetching", the download is considered stalled
+- Stall state is tracked via `stalled_since` and `stall_retries` columns in the `jobs` table
+- The UI shows a "Stalled" badge with duration (e.g., "Stalled 2m 15s")
+- qBittorrent API shows stalled downloads with `stalledDL` state
+
+### Automatic Retry
+
+When a stall is detected, the poller automatically attempts recovery:
+1. **First retry** (after 60s stall): Sends Reannounce (torrents) or Resume (usenet) to Torbox. WebDL skips directly to step 2.
+2. **Second retry** (after another 60s stall): Deletes the download from Torbox and re-submits the original URL, creating a new job.
+3. **Give up** (after another 60s stall): Marks the job as Failed and moves it to history.
+
+Each retry resets the stall timer, giving the download a fresh 60-second window.
+
+### Manual Retry
+
+The `?mode=retry_stalled&nzo_id=XXX` API mode sends a Reannounce/Resume command to Torbox and resets the stall counters, giving the download another chance before automatic retry triggers. The web UI shows a Retry button (↻) for stalled downloads.
+
+### Speed Tracking
+
+The state sync poller computes download speed from `sizeleft` changes between poll cycles. This fixes the issue where speed was always 0 in the database, and enables the qBittorrent API to correctly distinguish between `downloading` (active, speed > 0) and `stalledDL` (no progress) states.
 
 ## Download Flow
 

@@ -412,18 +412,24 @@ async def index(request: Request) -> HTMLResponse:
         torbox_connected = bool(torbox_api_key)
 
     if db and db.conn:
-        # Read queue items with torbox_state
+        # Read queue items with torbox_state and stall tracking
         cursor = await db.conn.execute(
             "SELECT nzo_id, filename, status, category, priority, percentage, "
-            "size, sizeleft, speed, download_time, torbox_state "
+            "size, sizeleft, speed, download_time, torbox_state, stalled_since "
             "FROM jobs ORDER BY position"
         )
         rows = await cursor.fetchall()
         total_speed = 0
         total_sizeleft = 0
+        now = __import__("time").time()
         for row in rows:
             status = row[2] or "Queued"
+            stalled_since = row[11] or 0
+            stalled = stalled_since > 0
+            # If stalled, override display status
+            display_status = "Stalled" if stalled else status
             status_label = (
+                "stalled" if stalled else
                 "downloading" if status == "Downloading" else
                 "paused" if status == "Paused" else
                 "fetching" if status == "Fetching" else
@@ -436,15 +442,25 @@ async def index(request: Request) -> HTMLResponse:
             item_sizeleft = row[7] or 0
             total_speed += item_speed
             total_sizeleft += item_sizeleft
+            # Compute stall duration string
+            if stalled and stalled_since > 0:
+                elapsed = now - stalled_since
+                minutes = int(elapsed) // 60
+                seconds = int(elapsed) % 60
+                stall_duration = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+            else:
+                stall_duration = ""
             queue_items.append({
-                "nzo_id": row[0], "filename": row[1], "status": status,
+                "nzo_id": row[0], "filename": row[1], "status": display_status,
                 "status_label": status_label, "cat": row[3] or "*",
                 "priority": row[4], "priority_label": priority_label,
                 "percentage": str(int(row[5] or 0)),
                 "size": _format_size(row[6] or 0),
-                "speed": _format_size(item_speed) + "/s" if item_speed else "—",
+                "speed": _format_size(item_speed) + "/s" if item_speed and not stalled else ("Stalled " + stall_duration if stalled else "—"),
                 "timeleft": "—",
                 "torbox_state": row[10] or "",
+                "stalled": stalled,
+                "stall_duration": stall_duration,
             })
 
         # Read completed/failed items from history when toggled on

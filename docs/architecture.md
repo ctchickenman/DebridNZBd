@@ -58,14 +58,26 @@ gateway that works with existing client applications without modification.
 1. `core/state_sync.py` runs every N seconds (configurable, default 5)
 2. Calls `torbox/client.py` to fetch usenet/torrents/webdl lists
 3. Matches Torbox IDs to local jobs by `torbox_id` column
-4. Updates job status, size, percentage from Torbox data
-5. **Skips locally-paused jobs** — jobs with status `Paused` are not overwritten by the poller
-6. If a job reaches "completed" or "cached" state:
+4. Updates job status, size, percentage, speed from Torbox data
+5. **Computes download speed** from `sizeleft` delta between poll cycles
+6. **Detects stalled downloads** — if `percentage` is unchanged for 60+ seconds while status is "Downloading" or "Fetching", the download is considered stalled
+7. **Skips locally-paused jobs** — jobs with status `Paused` are not overwritten by the poller
+8. If a job reaches "completed" or "cached" state:
    - Requests CDN download link via `torbox/client.py:request_*_dl()`
    - Enqueues the job to the CDN download worker pool (`run_cdn_processor`)
-7. `core/cdn_downloader.py` streams the CDN file to local disk
-8. On success: moves job from `jobs` table to `history` table
-9. **Orphaned jobs** (deleted on Torbox side) are reconciled by matching URL, magnet hash, filename, or type
+9. `core/cdn_downloader.py` streams the CDN file to local disk
+10. On success: moves job from `jobs` table to `history` table
+11. **Orphaned jobs** (deleted on Torbox side) are reconciled by matching URL, magnet hash, filename, or type
+
+### Stalled Download Retry
+
+When a download stalls (no progress for 60+ seconds), the state sync poller automatically attempts recovery:
+
+1. **First retry** — Sends Reannounce (torrents) or Resume (usenet) to Torbox. WebDL skips to step 2.
+2. **Second retry** — Deletes the download from Torbox and re-submits the original URL, creating a new job.
+3. **Give up** — After the third stall, marks the job as Failed and moves to history.
+
+Each retry resets the 60-second stall timer. The `retry_stalled` API mode (`?mode=retry_stalled&nzo_id=XXX`) provides manual retry, sending Reannounce/Resume and resetting the stall counters. The web UI shows a Retry button (↻) for stalled downloads with the stall duration displayed.
 
 ### SABnzbd API Mode Dispatch
 
@@ -86,6 +98,7 @@ The `api/router.py` handles all incoming `?mode=XXX` requests:
 | `change_cat` | `api/queue.py` | Yes (API key only) |
 | `priority` | `api/queue.py` | Yes (API key only) |
 | `speedlimit` | `api/queue.py` | Yes (API key only) |
+| `retry_stalled` | `api/queue.py` | Yes (API key only) |
 | `history` | `api/history.py` | Yes (API key only) |
 | `retry` | `api/history.py` | Yes (API key only) |
 | `retry_all` | `api/history.py` | Yes (API key only) |
@@ -175,6 +188,7 @@ The Web UI uses session-based authentication with a setup wizard for first-time 
 | Queued | `queuedDL` | Waiting in Torbox queue |
 | Downloading (speed > 0) | `downloading` | Active download |
 | Downloading (speed = 0) | `stalledDL` | Download started but stalled |
+| Stalled (locally detected) | `stalledDL` | No progress for 60+ seconds |
 | Paused | `pausedDL` | Locally paused only |
 | Fetching | `moving` | CDN download in progress |
 | Complete | `uploading` | qBittorrent convention for completed+seeding |

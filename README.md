@@ -20,6 +20,7 @@ DebridNZBd also implements the qBittorrent WebUI API, allowing 3rd-party torrent
 - **Auto-download** — CDN files downloaded to local disk automatically
 - **Queue management** — Pause, resume, reorder, categorize downloads
 - **History tracking** — Complete job history with retry support
+- **Stalled download retry** — Automatic detection and recovery (resume → restart), manual retry button
 - **Notifications** — Email and Apprise notifications
 - **Scheduling** — Time-based pause/resume/speedlimit
 
@@ -204,7 +205,7 @@ The qBittorrent API is available at `/api/v2/` and uses cookie-based SID authent
 
 Standard SABnzbd HTTP API for *arr client integration. Authentication uses API keys (`apikey` parameter).
 
-Key modes: `addurl`, `addfile`, `queue`, `pause`, `resume`, `delete`, `history`, `status`, `get_config`, `set_config`
+Key modes: `addurl`, `addfile`, `queue`, `pause`, `resume`, `delete`, `retry_stalled`, `history`, `status`, `get_config`, `set_config`
 
 ### qBittorrent WebUI API (`/api/v2/...`)
 

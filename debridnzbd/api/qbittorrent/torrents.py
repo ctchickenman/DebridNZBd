@@ -57,7 +57,8 @@ async def _find_jobs_by_hashes(
     cursor = await db.conn.execute(
         f"""SELECT nzo_id, filename, nzo_url, category, priority, status,
                    size, sizeleft, percentage, time_added, time_completed,
-                   torbox_id, torbox_type, torbox_hash, speed, tags, position
+                   torbox_id, torbox_type, torbox_hash, speed, tags, position,
+                   stalled_since
             FROM jobs
             WHERE LOWER(torbox_hash) IN ({placeholders})
                OR nzo_id IN ({placeholders})""",
@@ -107,7 +108,8 @@ async def torrents_info(
     cursor = await db.conn.execute(
         """SELECT nzo_id, filename, nzo_url, category, priority, status,
                   size, sizeleft, percentage, time_added, time_completed,
-                  torbox_id, torbox_type, torbox_hash, speed, tags, position
+                  torbox_id, torbox_type, torbox_hash, speed, tags, position,
+                  stalled_since
            FROM jobs WHERE torbox_type = 'torrent' ORDER BY position"""
     )
 
