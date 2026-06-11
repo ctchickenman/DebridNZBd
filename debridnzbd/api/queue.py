@@ -1134,7 +1134,7 @@ async def handle_retry_stalled(params: dict) -> JSONResponse:
     (torbox_id, torbox_type, stalled_since, current_status,
      cdn_link, local_path, filename, category) = row
 
-    logger.info(
+    logger.warning(
         "retry_stalled: %s torbox_id=%s torbox_type=%s status=%s "
         "stalled_since=%s cdn_link=%s local_path=%s",
         nzo_id, torbox_id, torbox_type, current_status,

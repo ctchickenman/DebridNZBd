@@ -134,13 +134,8 @@ async def check_torbox_availability(
 ) -> tuple[str, bool, float, str]:
     """Check if a download is available on Torbox CDN.
 
-    Queries Torbox for the current download status and returns whether
-    the file is available for CDN download (completed, cached, or seeding).
-
-    If the download is not found in the list matching ``torbox_type``, searches
-    all other download types as a fallback. This handles cases where the stored
-    type doesn't match the actual Torbox type (e.g. a URL classified as usenet
-    locally but stored as a torrent on Torbox).
+    Queries Torbox for the current download status by ID directly, then
+    falls back to searching other download types if not found.
 
     Args:
         client: An authenticated TorboxClient instance.
@@ -163,67 +158,58 @@ async def check_torbox_availability(
         logger.warning("check_torbox_availability: invalid torbox_id %r", torbox_id)
         return ("", False, 0.0, "")
 
-    logger.info(
-        "check_torbox_availability: searching for torbox_id=%s (expected type=%s)",
+    logger.warning(
+        "check_torbox_availability: looking up torbox_id=%d (expected type=%s)",
         dl_id, torbox_type,
     )
 
-    # Define the download types and their fetch functions, putting the
-    # expected type first so we check it before the others.
+    # Define the download types and their fetch-by-ID functions.
+    # Put the expected type first so we check it before the others.
     type_order = ["torrent", "usenet", "webdl"]
-    # Move the expected type to the front
     if torbox_type in type_order:
         type_order.remove(torbox_type)
         type_order.insert(0, torbox_type)
 
     for dtype in type_order:
         try:
+            # Query by specific ID — much more reliable than searching full lists
             if dtype == "torrent":
-                downloads = await client.get_torrent_list(bypass_cache=True)
+                downloads = await client.get_torrent_list(bypass_cache=True, torrent_id=dl_id)
             elif dtype == "usenet":
-                downloads = await client.get_usenet_list(bypass_cache=True)
+                downloads = await client.get_usenet_list(bypass_cache=True, usenet_id=dl_id)
             else:
-                downloads = await client.get_web_download_list(bypass_cache=True)
+                downloads = await client.get_web_download_list(bypass_cache=True, web_id=dl_id)
 
-            logger.info(
-                "check_torbox_availability: %s list returned %d downloads, "
-                "searching for id=%s",
-                dtype, len(downloads), dl_id,
+            logger.warning(
+                "check_torbox_availability: %s query for id=%s returned %d results",
+                dtype, dl_id, len(downloads),
             )
 
-            dl = next((d for d in downloads if d.id == dl_id), None)
-            if dl is not None:
+            if downloads:
+                dl = downloads[0]
                 status_lower = (dl.status or "").lower()
                 is_available = status_lower in COMPLETED_STATUSES
-                if dtype != torbox_type:
-                    logger.info(
-                        "check_torbox_availability: found %s as %s (expected %s), "
-                        "status=%s, cdn_available=%s",
-                        torbox_id, dtype, torbox_type, dl.status, is_available,
-                    )
-                else:
-                    logger.info(
-                        "check_torbox_availability: found %s in %s list, "
-                        "status=%s, cdn_available=%s, progress=%.2f",
-                        torbox_id, dtype, dl.status, is_available, dl.progress or 0.0,
-                    )
-                return (dl.status or "", is_available, dl.progress or 0.0, dtype)
-            else:
-                logger.info(
-                    "check_torbox_availability: id=%s not found in %s list (%d items)",
-                    dl_id, dtype, len(downloads),
+                logger.warning(
+                    "check_torbox_availability: found id=%s as %s (expected %s), "
+                    "status=%s, cdn_available=%s, progress=%.2f",
+                    dl_id, dtype, torbox_type, dl.status, is_available, dl.progress or 0.0,
                 )
+                return (dl.status or "", is_available, dl.progress or 0.0, dtype)
 
         except (TorboxAuthError, TorboxConnectionError, TorboxRateLimitError, TorboxError) as e:
             logger.warning(
-                "check_torbox_availability: Torbox API error fetching %s list: %s", dtype, e,
+                "check_torbox_availability: Torbox API error fetching %s id=%s: %s",
+                dtype, dl_id, e,
             )
         except Exception:
-            logger.exception("check_torbox_availability: unexpected error fetching %s list", dtype)
+            logger.exception(
+                "check_torbox_availability: unexpected error fetching %s id=%s",
+                dtype, dl_id,
+            )
 
     logger.warning(
-        "check_torbox_availability: download %s not found in any Torbox list "
-        "(searched torrent, usenet, webdl)",
+        "check_torbox_availability: download %s not found by ID in any Torbox list "
+        "(queried torrent, usenet, webdl by id)",
         torbox_id,
     )
     return ("", False, 0.0, "")
