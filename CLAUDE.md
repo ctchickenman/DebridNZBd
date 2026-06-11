@@ -232,7 +232,7 @@ Each retry resets the stall timer, giving the download a fresh 60-second window.
 
 ### Manual Retry
 
-The `?mode=retry_stalled&nzo_id=XXX` API mode sends a Reannounce/Resume command to Torbox and resets the stall counters, giving the download another chance before automatic retry triggers. The web UI shows a Retry button (↻) for stalled downloads.
+The `?mode=retry_stalled&nzo_id=XXX` API mode sends a Reannounce/Resume command to Torbox and resets the stall counters, giving the download another chance before automatic retry triggers. In the web UI, a Retry button (↻) is available on all active downloads (not just stalled ones) — for stalled downloads it appears as a filled blue button, for normal downloads it appears as a subtle outline button.
 
 ### Speed Tracking
 

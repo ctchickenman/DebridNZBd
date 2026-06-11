@@ -88,7 +88,9 @@
         <td>{{ item.timeleft }}</td>
         <td class="actions">
           {% if item.stalled %}
-          <button class="btn btn-sm btn-info" title="Retry" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
+          <button class="btn btn-sm btn-info" title="Retry stalled download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
+          {% elif item.status not in ('Complete', 'Failed', 'Fetching') %}
+          <button class="btn btn-sm btn-outline" title="Retry download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
           {% endif %}
           {% if item.status == 'Paused' %}
           <button class="btn btn-sm btn-success" title="Resume" onclick="apiAction('resume', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Resumed'})">▶</button>
