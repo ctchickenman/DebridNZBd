@@ -78,11 +78,8 @@
           pre.textContent = lines.slice(-MAX_LINES).join('\n');
         }
 
-        // Auto-scroll to bottom if already near bottom
-        var atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 50;
-        if (atBottom) {
-          pre.scrollTop = pre.scrollHeight;
-        }
+        // Always scroll to bottom when playing
+        pre.scrollTop = pre.scrollHeight;
       })
       .catch(function() {
         // Silently ignore fetch errors
