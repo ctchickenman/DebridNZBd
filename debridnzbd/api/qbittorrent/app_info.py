@@ -14,6 +14,8 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from debridnzbd.api.qbittorrent.dependencies import get_config, require_sid
 from debridnzbd.core.config_store import ConfigStore
 
+from pathlib import Path
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/app", tags=["qBittorrent App"])
@@ -47,9 +49,15 @@ async def app_default_save_path(
     config: ConfigStore = Depends(get_config),
     sid: str = Depends(require_sid),
 ):
-    """Return the default save path for downloads as plain text."""
+    """Return the default save path for downloads as plain text.
+
+    Returns an absolute path so that *arr clients can apply their own
+    remote path mappings. Relative config values are resolved against
+    the current working directory (e.g. ``downloads/complete`` →
+    ``/data/downloads/complete`` in Docker).
+    """
     save_path = await config.get("folders", "complete_dir", "downloads/complete")
-    return Response(content=save_path, media_type="text/plain")
+    return Response(content=str(Path(save_path).resolve()), media_type="text/plain")
 
 
 @router.get("/preferences")
@@ -69,10 +77,16 @@ async def app_preferences(
     dl_limit = int(await config.get("torbox", "qbit_dl_limit", "0"))
     listen_port = int(await config.get("misc", "port", "8080"))
 
+    # Resolve paths to absolute so *arr clients can apply remote path mappings.
+    # A relative value like "downloads/complete" becomes "/data/downloads/complete"
+    # when the app runs with WORKDIR=/data (Docker default).
+    save_path_resolved = str(Path(save_path).resolve())
+    temp_path_resolved = str(Path(temp_path).resolve())
+
     preferences = {
-        # Paths
-        "save_path": save_path,
-        "temp_path": temp_path,
+        # Paths — absolute paths are required for *arr remote path mappings
+        "save_path": save_path_resolved,
+        "temp_path": temp_path_resolved,
         "temp_path_enabled": False,
         # Connection
         "listen_port": listen_port,

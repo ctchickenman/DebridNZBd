@@ -9,6 +9,7 @@ later.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -69,19 +70,28 @@ async def sync_maindata(
 
     rows = await cursor.fetchall()
 
+    # Resolve complete_dir to an absolute path so *arr clients can apply
+    # their own remote path mappings.
+    complete_dir = str(Path(
+        await config.get("folders", "complete_dir", "downloads/complete")
+    ).resolve())
+
     # Build torrents dict keyed by hash
     torrents = {}
     for row in rows:
-        info = build_torrent_info(row)
+        info = build_torrent_info(row, save_path=complete_dir)
         torrents[info["hash"]] = info
 
     # Build categories
-    complete_dir = await config.get("folders", "complete_dir", "downloads/complete")
     cat_cursor = await db.conn.execute("SELECT name, dir FROM categories ORDER BY name")
     cat_rows = await cat_cursor.fetchall()
     categories = {}
     for name, cat_dir in cat_rows:
-        categories[name] = {"name": name, "savePath": cat_dir if cat_dir else f"{complete_dir}/{name}"}
+        if cat_dir:
+            save_path = str(Path(cat_dir).resolve())
+        else:
+            save_path = str(Path(f"{complete_dir}/{name}").resolve())
+        categories[name] = {"name": name, "savePath": save_path}
 
     # Build tags list (torrent-type only, matching what the qBittorrent client sees)
     tag_cursor = await db.conn.execute("SELECT tags FROM jobs WHERE tags IS NOT NULL AND tags != '' AND torbox_type = 'torrent'")

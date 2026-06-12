@@ -69,6 +69,7 @@ def get_torrent_hash(torbox_hash: str, nzo_id: str, torbox_type: str) -> str:
 
 def build_torrent_info(
     row: tuple,
+    save_path: str = "",
     torbox_type: str = "torrent",
 ) -> dict[str, Any]:
     """Build a qBittorrent torrent info dict from a database row.
@@ -79,6 +80,14 @@ def build_torrent_info(
     size, sizeleft, percentage, time_added, time_completed,
     torbox_id, torbox_type, torbox_hash, speed, tags, position,
     stalled_since
+
+    Args:
+        row: Database row tuple.
+        save_path: Absolute path to the download directory. *arr clients
+            require an absolute path so they can apply their own remote
+            path mappings. When empty, ``save_path`` and ``content_path``
+            are set to empty strings for backward compatibility.
+        torbox_type: The download type for hash synthesis.
     """
     (
         nzo_id, filename, nzo_url, category, priority, status,
@@ -112,8 +121,8 @@ def build_torrent_info(
         "tags": tags or "",
         "added_on": int(time_added) if time_added else 0,
         "completion_on": int(time_completed) if time_completed and time_completed > 0 else -1,
-        "save_path": "",
-        "content_path": "",
+        "save_path": save_path,
+        "content_path": f"{save_path}/{filename}" if save_path and filename else save_path,
         "num_seeds": 0,
         "num_leechs": 0,
         "num_complete": 0,

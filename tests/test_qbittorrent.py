@@ -144,10 +144,12 @@ class TestQbitApp:
         assert response.text  # non-empty version string
 
     def test_default_save_path(self, qbit_client) -> None:
-        """Should return the default save path."""
+        """Should return an absolute default save path."""
         cookies = self._login(qbit_client)
         response = qbit_client.get("/api/v2/app/defaultSavePath", cookies=cookies)
         assert response.status_code == 200
+        # Must be an absolute path (starts with /)
+        assert response.text.startswith("/")
         assert "downloads/complete" in response.text
 
     def test_preferences(self, qbit_client) -> None:
@@ -158,6 +160,9 @@ class TestQbitApp:
         data = response.json()
         assert "save_path" in data
         assert "dl_limit" in data
+        # Paths must be absolute for *arr remote path mapping
+        assert data["save_path"].startswith("/")
+        assert data["temp_path"].startswith("/")
 
 
 class TestQbitTorrents:
@@ -273,12 +278,16 @@ class TestQbitTorrents:
         assert "Ok" in response.text
 
     def test_torrents_categories(self, qbit_client) -> None:
-        """Should return categories dict."""
+        """Should return categories dict with absolute save paths."""
         cookies = self._login(qbit_client)
         response = qbit_client.get("/api/v2/torrents/categories", cookies=cookies)
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, dict)
+        # All category save paths must be absolute for *arr remote path mapping
+        for name, cat in data.items():
+            assert cat["savePath"].startswith("/"), \
+                f"Category {name} savePath must be absolute, got: {cat['savePath']}"
 
     def test_torrents_create_category(self, qbit_client) -> None:
         """Should create a new category."""
@@ -411,6 +420,10 @@ class TestQbitSync:
         assert "server_state" in data
         assert "rid" in data
         assert data["rid"] > 0
+        # Category save paths must be absolute
+        for name, cat in data["categories"].items():
+            assert cat["savePath"].startswith("/"), \
+                f"Category {name} savePath must be absolute, got: {cat['savePath']}"
 
     def test_maindata_rid_increments(self, qbit_client) -> None:
         """Each maindata call should increment the rid."""

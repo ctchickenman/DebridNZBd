@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -98,10 +99,18 @@ async def torrents_info(
     hashes: str = Query(""),
     sid: str = Depends(require_sid),
     db: Database = Depends(get_db),
+    config: ConfigStore = Depends(get_config),
 ):
     """List torrents with optional filtering, sorting, and pagination."""
     if not db or not db.conn:
         return JSONResponse(content=[])
+
+    # Resolve complete_dir to an absolute path so *arr clients can apply
+    # their own remote path mappings.  A relative config value like
+    # "downloads/complete" becomes "/data/downloads/complete" in Docker.
+    complete_dir = str(Path(
+        await config.get("folders", "complete_dir", "downloads/complete")
+    ).resolve())
 
     # Only show torrent-type jobs in the qBittorrent API.
     # Usenet and webdl jobs are managed through the SABnzbd API.
@@ -114,7 +123,7 @@ async def torrents_info(
     )
 
     rows = await cursor.fetchall()
-    torrents = [build_torrent_info(row) for row in rows]
+    torrents = [build_torrent_info(row, save_path=complete_dir) for row in rows]
 
     # Apply hash filter
     hash_list = _parse_hashes(hashes)
@@ -485,14 +494,18 @@ async def torrents_properties(
     size, sizeleft, percentage, time_added, time_completed = row[6:11]
     torbox_id, torbox_type, torbox_hash, speed, tags = row[11:16]
 
-    save_path = ""
+    save_path = str(Path(
+        await config.get("folders", "complete_dir", "downloads/complete")
+    ).resolve())
     if category and category != "*":
         cursor = await db.conn.execute(
             "SELECT dir FROM categories WHERE name = ?", (category,)
         )
         cat_row = await cursor.fetchone()
         if cat_row and cat_row[0]:
-            save_path = cat_row[0]
+            save_path = str(Path(cat_row[0]).resolve())
+        else:
+            save_path = str(Path(f"{save_path}/{category}").resolve())
 
     dloaded = size - sizeleft if size and sizeleft else 0
     ratio = 0.0
@@ -664,14 +677,19 @@ async def torrents_categories(
     if not db or not db.conn:
         return JSONResponse(content={})
 
-    complete_dir = await config.get("folders", "complete_dir", "downloads/complete")
+    complete_dir = str(Path(
+        await config.get("folders", "complete_dir", "downloads/complete")
+    ).resolve())
 
     cursor = await db.conn.execute("SELECT name, dir FROM categories ORDER BY name")
     rows = await cursor.fetchall()
 
     categories = {}
     for name, cat_dir in rows:
-        save_path = cat_dir if cat_dir else f"{complete_dir}/{name}"
+        if cat_dir:
+            save_path = str(Path(cat_dir).resolve())
+        else:
+            save_path = str(Path(f"{complete_dir}/{name}").resolve())
         categories[name] = {"name": name, "savePath": save_path}
 
     return JSONResponse(content=categories)
