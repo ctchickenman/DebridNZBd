@@ -97,6 +97,10 @@ after 3 hours. Returns the CDN URL as a string.
 
 List the user's usenet downloads. Updated every 5 seconds for live downloads.
 
+When `usenet_id` is specified, the Torbox API returns `data` as a single object
+(dict) instead of a list. The method handles both formats, returning a list in
+all cases.
+
 #### `check_usenet_cached(hashes, format="object")`
 
 Check if usenet downloads are already cached on Torbox's servers.
@@ -126,6 +130,10 @@ Request a CDN download link for a completed torrent.
 List the user's torrents. Updated every 600 seconds for cached data,
 or live with `bypass_cache=True`.
 
+When `torrent_id` is specified, the Torbox API returns `data` as a single object
+(dict) instead of a list. The method handles both formats, returning a list in
+all cases.
+
 #### `check_torrent_cached(hashes, format="object", list_files=False)`
 
 Check if torrents are cached. Set `list_files=True` to include file lists
@@ -149,6 +157,10 @@ Request a CDN download link for a completed web download.
 #### `get_web_download_list(bypass_cache=False, web_id=None, offset=0, limit=1000)`
 
 List the user's web downloads. Updated every 5 seconds.
+
+When `web_id` is specified, the Torbox API returns `data` as a single object
+(dict) instead of a list. The method handles both formats, returning a list in
+all cases.
 
 #### `check_web_cached(hashes, format="object")`
 
@@ -231,6 +243,30 @@ valid for 3 hours. The client handles multiple response formats:
 3. **Dict with `download_link` key**: `{"success": true, "data": {"download_link": "https://..."}}`
 
 If the response data is null or unrecognized, an empty string is returned.
+
+## ID-Based Query Behavior
+
+When querying by specific ID (e.g., `get_torrent_list(torrent_id=123)`), the Torbox API
+returns `data` as a single object dict instead of a list:
+
+```json
+// Without ID: GET /api/torrents/mylist
+{"success": true, "data": [{"id": 123, ...}, {"id": 456, ...}]}
+
+// With ID: GET /api/torrents/mylist?id=123
+{"success": true, "data": {"id": 123, ...}}
+```
+
+All `get_*_list` methods handle both formats transparently. When `data` is a single
+object, it's wrapped in a list of one element before returning.
+
+### Cross-Type ID Queries
+
+When querying a download by ID from the wrong type endpoint (e.g., querying
+`/api/usenet/mylist?id=<torrent_id>`), the Torbox API may return a 500 error or
+return the full unfiltered list. The `check_torbox_availability()` function in
+`state_sync.py` verifies that the result ID matches the requested ID, discarding
+false matches from unfiltered list responses.
 
 ## Security Considerations
 

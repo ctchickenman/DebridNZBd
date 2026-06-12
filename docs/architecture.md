@@ -69,15 +69,27 @@ gateway that works with existing client applications without modification.
 10. On success: moves job from `jobs` table to `history` table
 11. **Orphaned jobs** (deleted on Torbox side) are reconciled by matching URL, magnet hash, filename, or type
 
+**Note on Torbox API response format:** When querying by specific ID (e.g., `get_torrent_list(torrent_id=123)`), the Torbox API returns `data` as a single object dict instead of a list. All `get_*_list` methods handle both formats transparently.
+
 ### Stalled Download Retry
 
 When a download stalls (no progress for 60+ seconds), the state sync poller automatically attempts recovery:
 
-1. **First retry** — Sends Reannounce (torrents) or Resume (usenet) to Torbox. WebDL skips to step 2.
+1. **First retry** — Checks if the download is available on CDN (completed/cached/seeding on Torbox). If CDN-available, transitions the job to Fetching so the CDN processor re-downloads. If not CDN-available, sends Reannounce (torrents) or Resume (usenet) to Torbox. WebDL skips directly to step 2.
 2. **Second retry** — Deletes the download from Torbox and re-submits the original URL, creating a new job.
 3. **Give up** — After the third stall, marks the job as Failed and moves to history.
 
-Each retry resets the 60-second stall timer. The `retry_stalled` API mode (`?mode=retry_stalled&nzo_id=XXX`) provides manual retry, sending Reannounce/Resume and resetting the stall counters. The web UI shows a Retry button (↻) for stalled downloads with the stall duration displayed.
+Each retry resets the 60-second stall timer. The `retry_stalled` API mode (`?mode=retry_stalled&nzo_id=XXX`) provides manual CDN-aware retry: it checks Torbox availability by ID, corrects the job type if needed, and takes the best recovery action. The web UI shows a Retry button (↻) for stalled downloads with the stall duration displayed.
+
+### CDN Availability Check
+
+`check_torbox_availability()` in `state_sync.py` queries the Torbox API by specific download ID to determine the current status and CDN availability of a download. It:
+
+1. Queries all three download types (torrent, usenet, webdl) by ID, starting with the expected type
+2. Handles the Torbox API quirk where ID-based queries return `data` as a single object (dict) instead of a list
+3. Verifies the result ID matches the requested ID (to prevent false matches if Torbox ignores the ID filter on error paths)
+4. Corrects the job's `torbox_type` if the download was found in a different type list than expected
+5. Returns `(status, is_cdn_available, progress, actual_type)` for retry decision-making
 
 ### SABnzbd API Mode Dispatch
 

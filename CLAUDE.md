@@ -224,7 +224,7 @@ The background state sync poller tracks when each job's `percentage` last change
 ### Automatic Retry
 
 When a stall is detected, the poller automatically attempts recovery:
-1. **First retry** (after 60s stall): Sends Reannounce (torrents) or Resume (usenet) to Torbox. WebDL skips directly to step 2.
+1. **First retry** (after 60s stall): Checks CDN availability via `check_torbox_availability()`. If CDN-available (completed/cached/seeding), transitions the job to Fetching for CDN re-download. Otherwise, sends Reannounce (torrents) or Resume (usenet) to Torbox. WebDL skips directly to step 2.
 2. **Second retry** (after another 60s stall): Deletes the download from Torbox and re-submits the original URL, creating a new job.
 3. **Give up** (after another 60s stall): Marks the job as Failed and moves it to history.
 
@@ -248,6 +248,25 @@ The automatic stall retry (first attempt at 60s) also checks CDN availability be
 ### Speed Tracking
 
 The state sync poller computes download speed from `sizeleft` changes between poll cycles. This fixes the issue where speed was always 0 in the database, and enables the qBittorrent API to correctly distinguish between `downloading` (active, speed > 0) and `stalledDL` (no progress) states.
+
+### CDN Availability Check
+
+`check_torbox_availability()` in `state_sync.py` queries the Torbox API by specific download ID to determine the current status and CDN availability of a download. It:
+
+1. Queries all three download types (torrent, usenet, webdl) by ID, starting with the expected type
+2. Handles the Torbox API quirk where ID-based queries return `data` as a single object (dict) instead of a list
+3. Verifies the result ID matches the requested ID (to prevent false matches if Torbox ignores the ID filter on error paths)
+4. Corrects the job's `torbox_type` if the download was found in a different type list than expected
+5. Returns `(status, is_cdn_available, progress, actual_type)` for retry decision-making
+
+### Torbox API Response Formats
+
+The Torbox API returns `data` in different formats depending on whether an ID filter is used:
+
+- **Without ID** (`GET /api/torrents/mylist`): `data` is a **list** of download objects: `{"success": true, "data": [{...}, {...}]}`
+- **With ID** (`GET /api/torrents/mylist?id=123`): `data` is a **single object** (dict): `{"success": true, "data": {"id": 123, ...}}`
+
+All `get_*_list` methods in `torbox/client.py` handle both formats transparently, always returning a list. When `data` is a single object, it's wrapped in a list of one element.
 
 ## Download Flow
 
