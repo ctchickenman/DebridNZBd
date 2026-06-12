@@ -1523,6 +1523,11 @@ async def handle_queue(params: dict) -> JSONResponse:
         diskspace2=diskspace2,
         diskspacex1=diskspacex1,
         diskspacex2=diskspacex2,
+        # my_home (DefaultRootFolder): absolute path to the complete directory.
+        # *arr clients (Sonarr, Radarr) read this as the base directory for
+        # resolving relative complete_dir values when the SABnzbd version
+        # is < 2.0. Since we report version 1.x, they use this field.
+        my_home=complete_dir_resolved,
     )
 
     # Get speed limit from config

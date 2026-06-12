@@ -119,6 +119,11 @@ class QueueResponse(BaseModel):
     paused_all: bool = False
     quota: str = ""
     left_quota: str = ""
+    # Default root folder for resolving relative paths.
+    # SABnzbd exposes this as "my_home" in the queue response; Sonarr reads
+    # it as DefaultRootFolder to resolve relative complete_dir values when
+    # the SABnzbd version is < 2.0.
+    my_home: str = ""
 
 
 # ------------------------------------------------------------------ #

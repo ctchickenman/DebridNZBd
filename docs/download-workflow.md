@@ -391,9 +391,19 @@ When a download reaches `completed` or `cached` status:
    not available, falls back to synchronous I/O.
 5. **Move to category directory** (if configured): Downloaded files are moved
    from the incomplete directory to a category-specific subdirectory.
-6. **Move to history:** Copy the job row into the `history` table and delete
-   it from `jobs`. The `nzo_url` column preserves the original submission URL
-   so that retries can re-submit it.
+6. **Insert into history immediately:** The completed job is inserted into the
+   `history` table right away so *arr clients can find the download path via
+   `?mode=history`. The job remains in the `jobs` table during the grace period
+   (see Queue Complete Grace Period below). The `nzo_url` column preserves the
+   original submission URL so that retries can re-submit it.
+
+### Queue Complete Grace Period
+
+Completed and failed jobs stay in the `jobs` table for a configurable grace
+period (`switches.queue_complete`, default 300 seconds). During this time, the
+job is visible in both the queue (`?mode=queue`) and history (`?mode=history`).
+After the grace period expires, `_move_to_history()` removes the job from the
+`jobs` table and updates the existing history entry with any final data.
 
 ### Failure Handling
 
@@ -401,7 +411,10 @@ When a download reaches `error` or `failed` status:
 
 1. Update the job row: `status='Failed'`, `fail_message='Torbox: <status>'`,
    `time_completed=<now>`.
-2. Move to history (same as completion, but with `status='Failed'`).
+2. Insert into history immediately (same as completion, but with `status='Failed'`),
+   so *arr clients can see the failure in history right away.
+3. The job stays in the `jobs` table during the grace period, then is removed
+   by `_move_to_history()`.
 
 ## Progress Monitoring
 

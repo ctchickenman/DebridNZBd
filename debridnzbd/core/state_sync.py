@@ -963,10 +963,64 @@ async def _complete_job(
         logger.exception("State sync: failed to mark %s complete", nzo_id)
         return
 
-    # Note: the job is NOT moved to history here. The state sync poller will
-    # move it after the queue_complete grace period expires. This gives
-    # download clients (*arr, qBittorrent) time to observe the completed
-    # state before the job disappears from the active queue.
+    # Insert the completed job into history immediately so *arr clients
+    # (Sonarr, Radarr) can find the download path before the grace period
+    # expires. The job stays in the active queue during the grace period
+    # so *arr can observe the completed state, and it's also visible in
+    # history with the correct Storage path.
+    # Strip CDN URLs from local_path — never expose internal Torbox links
+    # as output paths. Resolve relative paths to absolute.
+    history_local_path = local_path or ""
+    if history_local_path.startswith(("http://", "https://")):
+        history_local_path = ""
+    elif history_local_path and not Path(history_local_path).is_absolute():
+        history_local_path = str(Path(history_local_path).resolve())
+    history_storage = history_local_path
+
+    try:
+        # Read the job row for history insertion
+        cursor = await db.conn.execute(
+            "SELECT filename, category, download_time, nzo_url, torbox_id, "
+            "torbox_type, fail_message, size, time_added, torbox_hash "
+            "FROM jobs WHERE nzo_id = ?",
+            (nzo_id,),
+        )
+        job_row = await cursor.fetchone()
+        if job_row:
+            await db.conn.execute(
+                """INSERT OR IGNORE INTO history
+                (nzo_id, name, status, size, category, download_time,
+                 completed, time_added, storage, torbox_id, torbox_type,
+                 fail_message, nzo_url, path, torbox_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    nzo_id,
+                    job_row[0],  # filename → name
+                    "Complete",
+                    job_row[8],  # size
+                    job_row[1],  # category
+                    job_row[2] or 0,  # download_time
+                    now,  # completed
+                    job_row[9],  # time_added
+                    history_storage,
+                    job_row[4],  # torbox_id
+                    job_row[5],  # torbox_type
+                    job_row[7] or "",  # fail_message
+                    job_row[3] or "",  # nzo_url
+                    history_local_path,  # path
+                    job_row[10] or "",  # torbox_hash
+                ),
+            )
+            await db.conn.commit()
+            logger.info("State sync: inserted %s into history for immediate *arr visibility", nzo_id)
+    except Exception:
+        logger.exception("State sync: failed to insert %s into history", nzo_id)
+        # Non-fatal — the grace period expiry will try again later
+
+    # Note: the job stays in the active queue during the grace period.
+    # The state sync poller will remove it from the queue after the
+    # queue_complete grace period expires. Since it's already in history,
+    # the removal from queue just cleans up the jobs table.
 
 
 async def _fail_job(
@@ -977,9 +1031,9 @@ async def _fail_job(
 ) -> None:
     """Mark a job as failed.
 
-    The job stays in the queue so download clients can see the failure.
-    The state sync poller will move it to history after the queue_complete
-    grace period expires.
+    Also inserts the failed job into history immediately so *arr clients
+    can see the failure. The job stays in the queue during the grace period
+    and is removed by the state sync poller after queue_complete expires.
     """
     try:
         await db.conn.execute(
@@ -993,12 +1047,68 @@ async def _fail_job(
         logger.exception("State sync: failed to mark %s as failed", nzo_id)
         return
 
+    # Insert the failed job into history immediately so *arr clients
+    # can find it. This mirrors what _complete_job does for successful
+    # downloads — the history entry is available right away while the
+    # job remains in the queue during the grace period.
+    try:
+        cursor = await db.conn.execute(
+            "SELECT filename, category, download_time, nzo_url, torbox_id, "
+            "torbox_type, fail_message, size, time_added, local_path, torbox_hash "
+            "FROM jobs WHERE nzo_id = ?",
+            (nzo_id,),
+        )
+        job_row = await cursor.fetchone()
+        if job_row:
+            # Resolve local_path for the history entry
+            fail_local_path = job_row[9] or ""
+            if fail_local_path.startswith(("http://", "https://")):
+                fail_local_path = ""
+            elif fail_local_path and not Path(fail_local_path).is_absolute():
+                fail_local_path = str(Path(fail_local_path).resolve())
+            fail_storage = fail_local_path
+
+            await db.conn.execute(
+                """INSERT OR IGNORE INTO history
+                (nzo_id, name, status, size, category, download_time,
+                 completed, time_added, storage, torbox_id, torbox_type,
+                 fail_message, nzo_url, path, torbox_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    nzo_id,
+                    job_row[0],  # filename → name
+                    "Failed",
+                    job_row[7],  # size
+                    job_row[1],  # category
+                    job_row[2] or 0,  # download_time
+                    now,  # completed
+                    job_row[8],  # time_added
+                    fail_storage,
+                    job_row[4],  # torbox_id
+                    job_row[5],  # torbox_type
+                    f"Torbox: {torbox_status}",  # fail_message
+                    job_row[3] or "",  # nzo_url
+                    fail_local_path,  # path
+                    job_row[10] or "",  # torbox_hash
+                ),
+            )
+            await db.conn.commit()
+            logger.info("State sync: inserted failed %s into history for immediate *arr visibility", nzo_id)
+    except Exception:
+        logger.exception("State sync: failed to insert failed %s into history", nzo_id)
+        # Non-fatal — the grace period expiry will try again
+
     # Note: the job is NOT moved to history here. The state sync poller will
     # move it after the queue_complete grace period expires.
 
 
 async def _move_to_history(db: object, nzo_id: str, now: float = 0) -> None:
     """Move a completed/failed job from jobs to history table.
+
+    If the job is already in history (inserted by _complete_job for
+    immediate *arr visibility), this updates it with the latest data
+    and removes it from the jobs table. If not already in history,
+    it inserts a new entry.
 
     Args:
         db: Database instance.
@@ -1033,30 +1143,70 @@ async def _move_to_history(db: object, nzo_id: str, now: float = 0) -> None:
             local_path = str(Path(local_path).resolve())
         storage = local_path
 
-        # Insert into history
-        await db.conn.execute(
-            """INSERT OR IGNORE INTO history
-            (nzo_id, name, status, size, category, download_time,
-             completed, time_added, storage, torbox_id, torbox_type, fail_message, nzo_url, path, torbox_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                row[0],   # nzo_id
-                row[1],   # filename → name
-                row[2],   # status
-                row[3],   # size
-                row[4],   # category
-                row[6] or 0,  # download_time
-                completed_time,  # completed
-                row[5],   # time_added
-                storage,  # storage: local disk path — never a CDN URL
-                row[8],   # torbox_id
-                row[9],   # torbox_type
-                row[10] or "",  # fail_message
-                row[11] or "",  # nzo_url
-                local_path,  # path: local disk path
-                row[13] or "",  # torbox_hash
-            ),
+        # Check if the entry already exists in history (inserted by _complete_job
+        # for immediate *arr visibility). If so, update it; otherwise, insert.
+        cursor = await db.conn.execute(
+            "SELECT 1 FROM history WHERE nzo_id = ?", (nzo_id,)
         )
+        existing = await cursor.fetchone()
+
+        if existing:
+            # Update existing history entry with latest data from the job.
+            # The job may have been updated since the initial history insertion
+            # (e.g., CDN download completed, changing local_path and status).
+            await db.conn.execute(
+                """UPDATE history SET
+                    name = ?, status = ?, size = ?, category = ?,
+                    download_time = ?, completed = ?, time_added = ?,
+                    storage = ?, torbox_id = ?, torbox_type = ?,
+                    fail_message = ?, nzo_url = ?, path = ?, torbox_hash = ?
+                WHERE nzo_id = ?""",
+                (
+                    row[1],   # filename → name
+                    row[2],   # status
+                    row[3],   # size
+                    row[4],   # category
+                    row[6] or 0,  # download_time
+                    completed_time,  # completed
+                    row[5],   # time_added
+                    storage,  # storage: local disk path — never a CDN URL
+                    row[8],   # torbox_id
+                    row[9],   # torbox_type
+                    row[10] or "",  # fail_message
+                    row[11] or "",  # nzo_url
+                    local_path,  # path: local disk path
+                    row[13] or "",  # torbox_hash
+                    nzo_id,   # WHERE clause
+                ),
+            )
+            logger.debug("State sync: updated existing history entry for %s", nzo_id)
+        else:
+            # No existing history entry — insert new one
+            await db.conn.execute(
+                """INSERT OR IGNORE INTO history
+                (nzo_id, name, status, size, category, download_time,
+                 completed, time_added, storage, torbox_id, torbox_type,
+                 fail_message, nzo_url, path, torbox_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    row[0],   # nzo_id
+                    row[1],   # filename → name
+                    row[2],   # status
+                    row[3],   # size
+                    row[4],   # category
+                    row[6] or 0,  # download_time
+                    completed_time,  # completed
+                    row[5],   # time_added
+                    storage,  # storage: local disk path — never a CDN URL
+                    row[8],   # torbox_id
+                    row[9],   # torbox_type
+                    row[10] or "",  # fail_message
+                    row[11] or "",  # nzo_url
+                    local_path,  # path: local disk path
+                    row[13] or "",  # torbox_hash
+                ),
+            )
+            logger.debug("State sync: inserted new history entry for %s", nzo_id)
 
         # Delete from jobs
         await db.conn.execute("DELETE FROM jobs WHERE nzo_id = ?", (nzo_id,))

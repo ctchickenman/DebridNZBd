@@ -66,7 +66,7 @@ gateway that works with existing client applications without modification.
    - Requests CDN download link via `torbox/client.py:request_*_dl()`
    - Enqueues the job to the CDN download worker pool (`run_cdn_processor`)
 9. `core/cdn_downloader.py` streams the CDN file to local disk
-10. On success: moves job from `jobs` table to `history` table
+10. On success: marks job as `Complete`, inserts into `history` table immediately (for *arr visibility), and keeps it in the `jobs` table during the grace period
 11. **Orphaned jobs** (deleted on Torbox side) are reconciled by matching URL, magnet hash, filename, or type
 
 **Note on Torbox API response format:** When querying by specific ID (e.g., `get_torrent_list(torrent_id=123)`), the Torbox API returns `data` as a single object dict instead of a list. All `get_*_list` methods handle both formats transparently.
@@ -83,19 +83,30 @@ Each retry resets the 60-second stall timer. The `retry_stalled` API mode (`?mod
 
 ### Queue Complete Grace Period
 
-When a download completes or fails, the job stays in the active queue for a configurable grace period before being moved to history. This gives download clients (*arr, qBittorrent) time to observe the completed state and grab the file path before the job disappears from the active queue.
+When a download completes or fails, the job is inserted into the `history` table immediately (so *arr clients can find it in history with the correct `Storage` path), and it remains in the `jobs` table for a configurable grace period. This dual presence ensures download clients can observe the completed state from both the queue and history perspectives.
 
-**Configuration:** `switches.queue_complete` — seconds to keep completed/failed jobs in the queue (default: `300` = 5 minutes). Set to `0` for immediate move to history (old behavior).
+**Configuration:** `switches.queue_complete` — seconds to keep completed/failed jobs in the queue (default: `300` = 5 minutes). Set to `0` for immediate removal from the queue (the history entry still exists immediately).
 
 **How it works:**
-1. When a download completes, the state sync poller sets `status = "Complete"` (or `"uploading"` in qBittorrent API) and `time_completed = now`, but does NOT move the job to history immediately.
-2. On each subsequent poll cycle, the poller checks for jobs whose `time_completed` is older than `queue_complete` seconds.
-3. Expired jobs are moved to history by `_move_to_history()`.
-4. The qBittorrent API reports `content_path` using the actual `local_path` from the database, so *arr clients can find the downloaded file even before it moves to history.
+1. When a download completes, `_complete_job()` sets `status = "Complete"` and **inserts the job into history immediately**. This ensures *arr clients can find the download path via `?mode=history` right away.
+2. The job stays in the `jobs` table with `status = "Complete"` (or `"uploading"` in qBittorrent API) during the grace period, so both queue and history endpoints show the download.
+3. On each poll cycle, the state sync poller checks for jobs whose `time_completed` is older than `queue_complete` seconds.
+4. Expired jobs are removed from the `jobs` table by `_move_to_history()`, which also **updates** the existing history entry with any final data (e.g., updated `local_path` from the CDN download) before deleting from the queue.
+5. The qBittorrent API reports `content_path` using the actual `local_path` from the database, so *arr clients can find the downloaded file even before it moves to history.
 
 **Why this matters:**
+- *arr clients (Sonarr, Radarr) read the `Storage` field from `?mode=history` to determine the output path of completed downloads. Without immediate history insertion, *arr can't find the download path during the grace period.
 - qBittorrent API only queries the `jobs` table, not `history`. Without the grace period, completed torrents vanish from the qBittorrent API immediately, causing *arr clients to treat them as failed.
-- SABnzbd API clients check both queue and history, but the grace period ensures the job appears in the queue with `status = "Complete"` before moving to history.
+- SABnzbd API clients check both queue and history. The dual presence ensures the job is visible from both endpoints.
+
+### *arr Path Resolution
+
+*arr clients (Sonarr, Radarr) determine download paths through multiple SABnzbd API endpoints:
+
+1. **`Storage` from `?mode=history`** — Primary source for the output path of completed downloads. This is always populated with the local file path or the resolved `complete_dir` as a fallback.
+2. **`config.Misc.complete_dir` from `?mode=get_config`** — Used for category-based path resolution. DebridNZBd injects `complete_dir` and `download_dir` into the `misc` section of the config response (resolved to absolute paths) even though they're stored in the `folders` section internally.
+3. **`CompleteDir` from `?mode=fullstatus`** — SABnzbd 2.0+ replacement for `DefaultRootFolder`. Always set to the resolved absolute path of `folders.complete_dir`.
+4. **`DefaultRootFolder` (`my_home`) from `?mode=queue`** — Used by SABnzbd < 2.0 clients to resolve relative `complete_dir` values. Set to the resolved absolute path of `folders.complete_dir`.
 
 ### CDN Availability Check
 

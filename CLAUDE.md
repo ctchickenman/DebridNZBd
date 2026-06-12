@@ -247,22 +247,31 @@ The automatic stall retry (first attempt at 60s) also checks CDN availability be
 
 ## Queue Complete Grace Period
 
-When a download completes or fails, DebridNZBd keeps the job in the active queue for a configurable grace period before moving it to history. This gives download clients (*arr, qBittorrent) time to observe the completed state and grab the file path before the job disappears.
+When a download completes or fails, DebridNZBd inserts the job into the `history` table immediately (so *arr clients can find the download path right away) and keeps it in the active `jobs` table for a configurable grace period. This dual presence ensures *arr clients can observe the completed state from both the queue and history perspectives.
 
 ### Configuration
 
 | Section | Key | Default | Description |
 |---|---|---|---|
-| `switches` | `queue_complete` | `300` | Seconds to keep completed/failed jobs in the queue before moving to history. Set to `0` for immediate move (old behavior). |
+| `switches` | `queue_complete` | `300` | Seconds to keep completed/failed jobs in the queue before removing from `jobs`. Set to `0` for immediate removal (history entry still exists). |
 
 ### Behavior
 
-- When `queue_complete > 0` (default 300 = 5 minutes): Completed jobs stay in the queue with `status = "Complete"` (or `"uploading"` in qBittorrent API) until the grace period expires, then are moved to history by the state sync poller.
-- When `queue_complete = 0`: Jobs are moved to history immediately after completion, same as the old behavior.
-- The state sync poller checks for expired jobs every cycle and moves them to history.
-- For SABnzbd API: *arr clients see the download complete in the queue (with `storage` and `path` fields pointing to the local file), then see it in history after the grace period.
+- When `queue_complete > 0` (default 300 = 5 minutes): Completed/failed jobs are inserted into `history` immediately by `_complete_job()` or `_fail_job()`. They also stay in the `jobs` table with `status = "Complete"` or `"Failed"`. After the grace period expires, `_move_to_history()` updates the history entry with any final data and removes the job from `jobs`.
+- When `queue_complete = 0`: Jobs are removed from `jobs` immediately after the history entry is created (same behavior as immediate removal).
+- The state sync poller checks for expired jobs every cycle and cleans up the `jobs` table.
+- For SABnzbd API: *arr clients see the download in history immediately (with `storage` pointing to the local file), and also in the queue with `status = "Complete"` during the grace period.
 - For qBittorrent API: Torrents show as `"uploading"` (complete) with the correct `content_path` pointing to the downloaded file, then vanish after the grace period.
 - `content_path` in the qBittorrent API uses the actual `local_path` from the database when available, falling back to `{save_path}/{filename}` for jobs still downloading.
+
+### *arr Path Resolution
+
+*arr clients (Sonarr, Radarr) determine download paths through multiple SABnzbd API endpoints. DebridNZBd provides all of these:
+
+1. **`Storage` from `?mode=history`** — Primary source for the output path. Always populated with the local file path or the resolved `complete_dir` as a fallback.
+2. **`config.Misc.complete_dir` from `?mode=get_config`** — Used for category-based path resolution. DebridNZBd injects `complete_dir` and `download_dir` into the `misc` section of the config response (resolved to absolute paths) even though they're stored in the `folders` section internally.
+3. **`CompleteDir` from `?mode=fullstatus`** — Always set to the resolved absolute path of `folders.complete_dir`.
+4. **`DefaultRootFolder` (`my_home`) from `?mode=queue`** — Used by SABnzbd < 2.0 clients to resolve relative `complete_dir` values. Set to the resolved absolute path of `folders.complete_dir`.
 
 ### Output Path Handling
 
@@ -270,13 +279,14 @@ All API responses that expose file paths (`storage`, `path`, `content_path`, `sa
 
 The queue and history responses both include `storage` (full file path) and `path` (parent directory). The `storage` field in particular is what *arr clients read to locate the downloaded file. These fields are derived from `local_path` in the jobs table, which is set by the CDN downloader after a successful download to disk.
 
+When `local_path` is empty (download not yet complete or CDN download failed), `storage` and `path` fall back to the resolved `complete_dir` absolute path (e.g., `/data/downloads/complete`). This ensures *arr clients always receive a valid absolute path they can use for remote path mapping, even before the file is on disk.
+
 Safety nets at multiple layers ensure CDN URLs never leak:
 1. **Database migration 006**: Clears any CDN URLs (`http://` or `https://` prefixes) from the `storage` and `path` columns in the history table.
-2. **`_move_to_history()`**: Strips CDN URLs from `local_path` before writing to `storage` and `path`.
-3. **API responses**: All endpoints strip CDN URLs from path fields before returning them.
-4. **Web UI**: Templates display `storage` as "Output" (not "CDN Link").
-
-When `local_path` is empty (download not yet complete or CDN download failed), `storage` and `path` are empty strings — *arr clients interpret this as "file not yet available on disk."
+2. **`_complete_job()` and `_fail_job()`**: Strip CDN URLs from `local_path` before inserting into history.
+3. **`_move_to_history()`**: Strips CDN URLs from `local_path` before writing to `storage` and `path`, and updates existing history entries with final data.
+4. **API responses**: All endpoints strip CDN URLs from path fields before returning them, and resolve relative paths to absolute.
+5. **Web UI**: Templates display `storage` as "Output" (not "CDN Link").
 
 ## Duplicate Detection and Cache-Aware Re-Download
 

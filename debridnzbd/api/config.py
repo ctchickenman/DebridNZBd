@@ -7,6 +7,7 @@ modes for reading and modifying DebridNZBd settings.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi.responses import JSONResponse
 
@@ -67,11 +68,28 @@ async def handle_get_config(params: dict) -> JSONResponse:
 
     section = params.get("section") or params.get("keyword")
 
+    # Resolve folder paths to absolute so *arr clients (Sonarr, Radarr) get
+    # valid paths they can use for remote path mapping. SABnzbd stores
+    # complete_dir and download_dir in the misc section, and *arr clients
+    # read them from there (config.Misc.complete_dir). Our config store
+    # keeps them in the folders section, so we inject the resolved absolute
+    # paths into the misc section for *arr compatibility.
+    complete_dir = await config.get("folders", "complete_dir", "downloads/complete")
+    download_dir = await config.get("folders", "download_dir", "downloads/incomplete")
+    complete_dir_resolved = str(Path(complete_dir).resolve())
+    download_dir_resolved = str(Path(download_dir).resolve())
+
     if section:
         # Return a single section
         if section == "categories":
             # Categories live in a separate table, not the config key-value store
             section_data = await _get_categories_config(db)
+        elif section == "misc":
+            # Inject resolved folder paths into the misc section for *arr clients.
+            # Sonarr reads config.Misc.complete_dir to determine the output directory.
+            section_data = await config.get_section(section, redact_secrets=True)
+            section_data["complete_dir"] = complete_dir_resolved
+            section_data["download_dir"] = download_dir_resolved
         else:
             try:
                 section_data = await config.get_section(section, redact_secrets=True)
@@ -80,9 +98,13 @@ async def handle_get_config(params: dict) -> JSONResponse:
         # SABnzbd wraps single sections in the same nested format
         all_config = {section: section_data}
     else:
-        # Return all sections — must include categories from its own table
+        # Return all sections — must include categories from its own table.
+        # Also inject resolved folder paths into misc for *arr compatibility.
         all_config = await config.get_all(redact_secrets=True)
         all_config["categories"] = await _get_categories_config(db)
+        all_config.setdefault("misc", {})
+        all_config["misc"]["complete_dir"] = complete_dir_resolved
+        all_config["misc"]["download_dir"] = download_dir_resolved
 
     return JSONResponse(content={"status": True, "config": all_config})
 
