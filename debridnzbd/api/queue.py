@@ -55,20 +55,23 @@ _CDN_AVAILABLE_STATUSES = {"completed", "cached", "seeding"}
 
 @dataclass
 class DuplicateCheckResult:
-    """Result of checking for a duplicate download in history.
+    """Result of checking for a duplicate download in history or active queue.
 
     Attributes:
-        action: One of "reuse_local" (file on disk), "redownload_cdn"
-            (cached on Torbox CDN but not on disk), "resubmit" (in history
-            but not on disk or CDN), or "new" (not in history).
+        action: One of "duplicate_active" (already in the active queue),
+            "reuse_local" (file on disk), "redownload_cdn" (cached on
+            Torbox CDN but not on disk), "resubmit" (in history but not
+            on disk or CDN), or "new" (not found).
         history_row: The matching history row tuple, or None.
         local_path: Absolute path to the existing file on disk, or None.
         size: File size from the history entry, or 0.
+        nzo_id: The nzo_id of the existing active job (for duplicate_active).
     """
     action: str
     history_row: tuple | None = None
     local_path: str | None = None
     size: float = 0.0
+    nzo_id: str | None = None
 
 
 def normalize_url(url: str) -> str:
@@ -99,11 +102,15 @@ async def handle_duplicate_check(
     url_type: str,
     torbox_hash: str = "",
 ) -> DuplicateCheckResult:
-    """Check if a download URL or hash already exists in history.
+    """Check if a download URL or hash already exists in the active queue or history.
 
-    Searches the history table for a matching entry. If found, checks
-    whether the local file still exists on disk and whether the content
-    is available on Torbox CDN for re-download.
+    First checks the ``jobs`` table for an active download with the same
+    URL or hash. If found, returns ``duplicate_active`` so the caller can
+    return the existing job's nzo_id instead of creating a duplicate.
+
+    If not in the active queue, searches the ``history`` table. If found,
+    checks whether the local file still exists on disk and whether the
+    content is available on Torbox CDN for re-download.
 
     Args:
         db: Database instance.
@@ -123,6 +130,48 @@ async def handle_duplicate_check(
     if not duplicate_detection:
         return DuplicateCheckResult(action="new")
 
+    # --- Step 1: Check the active jobs table ---
+    # If a download with the same URL or hash is currently in the queue
+    # (active, paused, or in grace period), return the existing nzo_id
+    # so the caller can return it instead of creating a duplicate.
+    if url:
+        normalized = normalize_url(url)
+        cursor = await db.conn.execute(
+            "SELECT nzo_id, status, local_path FROM jobs "
+            "WHERE nzo_url = ? AND torbox_type = ? "
+            "ORDER BY time_added DESC LIMIT 1",
+            (normalized, url_type),
+        )
+    elif torbox_hash:
+        cursor = await db.conn.execute(
+            "SELECT nzo_id, status, local_path FROM jobs "
+            "WHERE torbox_hash = ? "
+            "ORDER BY time_added DESC LIMIT 1",
+            (torbox_hash.lower(),),
+        )
+    else:
+        return DuplicateCheckResult(action="new")
+
+    job_row = await cursor.fetchone()
+    if job_row:
+        job_nzo_id, job_status, job_local_path = job_row
+        logger.info(
+            "duplicate_check: found active job nzo_id=%s status=%s — "
+            "returning duplicate_active",
+            job_nzo_id, job_status,
+        )
+        # If the job is Complete and the file exists on disk, return reuse_local
+        # so the caller can create a fresh Completed job pointing to the file.
+        if job_status == "Complete" and job_local_path and Path(job_local_path).exists():
+            return DuplicateCheckResult(
+                action="reuse_local",
+                local_path=job_local_path,
+                size=0.0,
+                nzo_id=job_nzo_id,
+            )
+        return DuplicateCheckResult(action="duplicate_active", nzo_id=job_nzo_id)
+
+    # --- Step 2: Check the history table ---
     # Build the query — match by URL (for addurl) or by hash (for addfile)
     if url:
         normalized = normalize_url(url)
@@ -496,13 +545,31 @@ async def handle_addurl(params: dict) -> JSONResponse:
     logger.info("addurl: type=%s url=%s", url_type, url[:100])
 
     # --- Duplicate detection ---
-    # Check if this URL has already been downloaded. If the file still exists
-    # on disk, reuse it. If cached on Torbox CDN, re-download. Otherwise,
-    # proceed with normal Torbox submission.
+    # Check if this URL has already been downloaded or is in the active queue.
+    # If active in the queue, return the existing nzo_id. If on disk, reuse it.
+    # If cached on Torbox CDN, re-download. Otherwise, proceed normally.
     dup_result = await handle_duplicate_check(db, config, url, url_type)
 
+    if dup_result.action == "duplicate_active":
+        # URL is already in the active queue — return the existing nzo_id
+        logger.info(
+            "addurl: duplicate active job found nzo_id=%s — returning existing ID",
+            dup_result.nzo_id,
+        )
+        return JSONResponse(content={"status": True, "nzo_ids": [dup_result.nzo_id]})
+
     if dup_result.action == "reuse_local":
-        # File already exists on disk — create a Completed job immediately
+        # File already exists on disk. If this match came from the active jobs
+        # table (nzo_id is set), return the existing job ID. Otherwise (from
+        # history table), create a new Completed job.
+        if dup_result.nzo_id:
+            logger.info(
+                "addurl: duplicate Complete job on disk nzo_id=%s path=%r — "
+                "returning existing ID",
+                dup_result.nzo_id, dup_result.local_path,
+            )
+            return JSONResponse(content={"status": True, "nzo_ids": [dup_result.nzo_id]})
+
         nzo_id = generate_nzo_id()
         logger.info(
             "addurl: duplicate found on disk nzo_id=%s path=%r — reusing local file",
@@ -1120,8 +1187,43 @@ async def handle_addfile(params: dict) -> JSONResponse:
             db, config, url="", url_type=url_type, torbox_hash=torbox_hash,
         )
 
+        if dup_result.action == "duplicate_active":
+            # Torrent is already in the active queue — delete the duplicate
+            # from Torbox and return the existing nzo_id
+            logger.info(
+                "addfile: duplicate active torrent found nzo_id=%s — "
+                "deleting Torbox download and returning existing ID",
+                dup_result.nzo_id,
+            )
+            if torbox_id:
+                try:
+                    cleanup_client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+                    await cleanup_client.control_torrent(int(torbox_id), "Delete")
+                    await cleanup_client.close()
+                except Exception:
+                    logger.debug("addfile: failed to delete duplicate Torbox download %s", torbox_id)
+            return JSONResponse(content={"status": True, "nzo_ids": [dup_result.nzo_id]})
+
         if dup_result.action == "reuse_local":
-            # File already on disk — delete the duplicate from Torbox and reuse
+            # File already on disk. If this match came from the active jobs
+            # table (nzo_id is set), delete the duplicate from Torbox and
+            # return the existing job ID. Otherwise (from history), create a
+            # new Completed job.
+            if dup_result.nzo_id:
+                logger.info(
+                    "addfile: duplicate Complete torrent on disk nzo_id=%s path=%r — "
+                    "deleting Torbox download and returning existing ID",
+                    dup_result.nzo_id, dup_result.local_path,
+                )
+                if torbox_id:
+                    try:
+                        cleanup_client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
+                        await cleanup_client.control_torrent(int(torbox_id), "Delete")
+                        await cleanup_client.close()
+                    except Exception:
+                        logger.debug("addfile: failed to delete duplicate Torbox download %s", torbox_id)
+                return JSONResponse(content={"status": True, "nzo_ids": [dup_result.nzo_id]})
+
             logger.info(
                 "addfile: duplicate torrent found on disk nzo_id=%s path=%r — "
                 "deleting Torbox download and reusing local file",

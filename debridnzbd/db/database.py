@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Current schema version — used to determine which migrations to run.
 # Increment this when adding new migrations.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 class Database:
@@ -535,6 +535,20 @@ class Database:
             logger.info("Migration 006: Resolved %d relative paths to absolute", resolved)
         else:
             logger.info("Migration 006: All paths already absolute")
+
+    async def _migration_007(self) -> None:
+        """Add index on jobs.nzo_url for fast duplicate detection lookups.
+
+        The duplicate detection system queries jobs by nzo_url and
+        torbox_type to find active downloads with the same URL. Without
+        an index, this requires a full table scan on every addurl request.
+        """
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_nzo_url ON jobs(nzo_url)"
+        )
+        await self.conn.commit()
+        logger.info("Migration 007: Ensured idx_jobs_nzo_url index exists")
+
 
 
 # ------------------------------------------------------------------ #

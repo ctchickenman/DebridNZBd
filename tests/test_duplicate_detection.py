@@ -4,13 +4,15 @@ Validates:
 - URL normalization for duplicate matching
 - DuplicateCheckResult dataclass defaults
 - handle_duplicate_check logic for all action types
-- addurl duplicate detection: reuse_local, redownload_cdn, resubmit, new
+- Jobs table check: duplicate_active for active downloads
+- addurl duplicate detection: reuse_local, redownload_cdn, resubmit, new, duplicate_active
 - Config gating: duplicate_detection switch enables/disables the feature
 - Database migration: torbox_hash column added to history table
 """
 
 import pytest
 import pytest_asyncio
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from io import BytesIO
@@ -81,6 +83,15 @@ class TestDuplicateCheckResult:
         assert result.history_row is None
         assert result.local_path is None
         assert result.size == 0.0
+        assert result.nzo_id is None
+
+    def test_duplicate_active_result(self) -> None:
+        result = DuplicateCheckResult(
+            action="duplicate_active",
+            nzo_id="SABnzbd_nzo_abc123",
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_abc123"
 
     def test_reuse_local_result(self) -> None:
         result = DuplicateCheckResult(
@@ -509,6 +520,297 @@ class TestHandleDuplicateCheck:
         )
         assert result.action == "reuse_local"
 
+    @pytest.mark.asyncio
+    async def test_url_in_active_jobs_returns_duplicate_active(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """When URL matches an active job in the queue, should return 'duplicate_active'."""
+        normalized_url = normalize_url("http://example.com/active_download.nzb")
+        now = time.time()
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_active01",
+                "active_download.nzb",
+                "",
+                normalized_url,
+                "*",
+                "Default",
+                0,
+                -1,
+                "Downloading",
+                1073741824.0,
+                536870912.0,
+                50.0,
+                now,
+                "99999",
+                "usenet",
+                "",
+                0,
+                "downloading",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        result = await handle_duplicate_check(
+            dup_db, dup_config, "http://example.com/active_download.nzb", "usenet"
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_active01"
+
+    @pytest.mark.asyncio
+    async def test_hash_in_active_jobs_returns_duplicate_active(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """When torbox_hash matches an active job, should return 'duplicate_active'."""
+        now = time.time()
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_active02",
+                "active_torrent.torrent",
+                "",
+                "",
+                "*",
+                "Default",
+                0,
+                -1,
+                "Queued",
+                0,
+                0,
+                0,
+                now,
+                "88888",
+                "torrent",
+                "abc123def456",
+                0,
+                "queued",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Search with uppercase hash should still match (case-insensitive)
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="", url_type="torrent", torbox_hash="ABC123DEF456"
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_active02"
+
+    @pytest.mark.asyncio
+    async def test_active_jobs_takes_priority_over_history(
+        self, dup_db: Database, dup_config: ConfigStore, tmp_path: Path
+    ) -> None:
+        """When URL matches both an active job and history, active job takes priority."""
+        normalized_url = normalize_url("http://example.com/both.nzb")
+        now = time.time()
+
+        # Insert into jobs (active)
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_active03",
+                "both.nzb",
+                "",
+                normalized_url,
+                "*",
+                "Default",
+                0,
+                -1,
+                "Queued",
+                0,
+                0,
+                0,
+                now,
+                "77777",
+                "usenet",
+                "",
+                0,
+                "queued",
+            ),
+        )
+
+        # Also insert into history
+        await dup_db.conn.execute(
+            """INSERT INTO history
+            (nzo_id, name, status, size, category, completed, time_added, torbox_id, torbox_type, nzo_url, path, torbox_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_hist_old",
+                "both.nzb",
+                "Completed",
+                1024.0,
+                "*",
+                1700000000.0,
+                1699999000.0,
+                "66666",
+                "usenet",
+                normalized_url,
+                "/nonexistent/both.nzb",
+                "",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Should return duplicate_active (from jobs), not reuse_local/redownload_cdn (from history)
+        result = await handle_duplicate_check(
+            dup_db, dup_config, "http://example.com/both.nzb", "usenet"
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_active03"
+
+    @pytest.mark.asyncio
+    async def test_complete_job_with_file_on_disk_returns_reuse_local(
+        self, dup_db: Database, dup_config: ConfigStore, tmp_path: Path
+    ) -> None:
+        """When a Complete job in the queue has a local file, should return reuse_local with nzo_id."""
+        normalized_url = normalize_url("http://example.com/complete_file.nzb")
+        now = time.time()
+
+        # Create a file on disk
+        complete_dir = tmp_path / "downloads" / "complete"
+        complete_dir.mkdir(parents=True, exist_ok=True)
+        test_file = complete_dir / "complete_file.mkv"
+        test_file.write_bytes(b"complete file data")
+
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added, time_completed,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state, local_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_complete01",
+                "complete_file.mkv",
+                "",
+                normalized_url,
+                "*",
+                "Default",
+                0,
+                -1,
+                "Complete",
+                1073741824.0,
+                0,
+                100.0,
+                now - 100,
+                now,
+                "55555",
+                "usenet",
+                "",
+                0,
+                "completed",
+                str(test_file),
+            ),
+        )
+        await dup_db.conn.commit()
+
+        result = await handle_duplicate_check(
+            dup_db, dup_config, "http://example.com/complete_file.nzb", "usenet"
+        )
+        # When Complete with file on disk, returns reuse_local with nzo_id
+        # so the caller returns the existing job ID instead of creating a new one
+        assert result.action == "reuse_local"
+        assert result.local_path == str(test_file)
+        assert result.nzo_id == "SABnzbd_nzo_complete01"
+
+    @pytest.mark.asyncio
+    async def test_complete_job_without_file_returns_duplicate_active(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """When a Complete job in queue has no local file, should return duplicate_active."""
+        normalized_url = normalize_url("http://example.com/complete_nofile.nzb")
+        now = time.time()
+
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added, time_completed,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state, local_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_complete02",
+                "complete_nofile.nzb",
+                "",
+                normalized_url,
+                "*",
+                "Default",
+                0,
+                -1,
+                "Complete",
+                1073741824.0,
+                0,
+                100.0,
+                now - 100,
+                now,
+                "44444",
+                "usenet",
+                "",
+                0,
+                "completed",
+                "",  # No local_path
+            ),
+        )
+        await dup_db.conn.commit()
+
+        result = await handle_duplicate_check(
+            dup_db, dup_config, "http://example.com/complete_nofile.nzb", "usenet"
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_complete02"
+
+    @pytest.mark.asyncio
+    async def test_no_active_job_falls_through_to_history(
+        self, dup_db: Database, dup_config: ConfigStore, tmp_path: Path
+    ) -> None:
+        """When URL is not in jobs table but is in history, should check history."""
+        normalized_url = normalize_url("http://example.com/history_only.nzb")
+
+        # Only insert into history, not into jobs
+        # Create a file on disk
+        complete_dir = tmp_path / "downloads" / "complete"
+        complete_dir.mkdir(parents=True, exist_ok=True)
+        test_file = complete_dir / "history_only.mkv"
+        test_file.write_bytes(b"history data")
+
+        await dup_db.conn.execute(
+            """INSERT INTO history
+            (nzo_id, name, status, size, category, completed, time_added, torbox_id, torbox_type, nzo_url, path, torbox_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_hist_only",
+                "history_only.mkv",
+                "Completed",
+                2048.0,
+                "*",
+                1700000000.0,
+                1699999000.0,
+                "33333",
+                "usenet",
+                normalized_url,
+                str(test_file),
+                "",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        result = await handle_duplicate_check(
+            dup_db, dup_config, "http://example.com/history_only.nzb", "usenet"
+        )
+        # Should fall through to history check and find reuse_local
+        assert result.action == "reuse_local"
+        assert result.local_path == str(test_file)
+
 
 # ------------------------------------------------------------------ #
 #  Integration tests for addurl duplicate detection                   #
@@ -635,6 +937,71 @@ class TestAddurlDuplicateDetection:
             # Should have called Torbox for a new download
             mock_instance.create_usenet_download.assert_called_once()
 
+    def test_addurl_duplicate_active_returns_existing_id(self, addurl_client) -> None:
+        """When URL matches an active job in the queue, should return the existing nzo_id."""
+        client, api_key, db, config, tmp_path = addurl_client
+
+        import asyncio
+
+        async def setup_active_job():
+            from debridnzbd.api.queue import normalize_url
+            url = normalize_url("http://example.com/active_dup.nzb")
+            now = time.time()
+            await db.conn.execute(
+                """INSERT INTO jobs (
+                    nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                    status, size, sizeleft, percentage, time_added,
+                    torbox_id, torbox_type, torbox_hash, position, torbox_state
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "SABnzbd_nzo_dup001",
+                    "active_dup.nzb",
+                    "",
+                    url,
+                    "*",
+                    "Default",
+                    0,
+                    -1,
+                    "Downloading",
+                    1073741824.0,
+                    536870912.0,
+                    50.0,
+                    now,
+                    "99999",
+                    "usenet",
+                    "",
+                    0,
+                    "downloading",
+                ),
+            )
+            await db.conn.commit()
+
+        asyncio.get_event_loop().run_until_complete(setup_active_job())
+
+        # Submit the same URL — should detect the duplicate and return the existing nzo_id
+        response = client.get(
+            "/api",
+            params={
+                "mode": "addurl",
+                "name": "http://example.com/active_dup.nzb",
+                "apikey": api_key,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] is True
+        assert data["nzo_ids"] == ["SABnzbd_nzo_dup001"]
+
+        # Verify no new job was created — there should still be exactly 1 job
+        async def check_job_count():
+            cursor = await db.conn.execute("SELECT COUNT(*) FROM jobs")
+            row = await cursor.fetchone()
+            return row[0]
+
+        count = asyncio.get_event_loop().run_until_complete(check_job_count())
+        assert count == 1
+
 
 # ------------------------------------------------------------------ #
 #  Database migration tests                                            #
@@ -718,5 +1085,27 @@ class TestHistoryTorboxHashMigration:
         assert row is not None
         assert row[0] == "SABnzbd_nzo_migrate_test"
         assert row[1] == "test.mkv"
+
+        await database.close()
+
+
+class TestJobsNzoUrlIndexMigration:
+    """Test that the idx_jobs_nzo_url index is created by migration 007."""
+
+    @pytest.mark.asyncio
+    async def test_jobs_nzo_url_index_exists(self, tmp_path: Path) -> None:
+        """After migration, there should be an index on jobs.nzo_url."""
+        db_path = tmp_path / "admin" / "test.db"
+        database = Database(db_path)
+        await database.initialize()
+        config = ConfigStore(database)
+        await config.seed_defaults()
+
+        # Check index exists
+        cursor = await database.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_jobs_nzo_url'"
+        )
+        row = await cursor.fetchone()
+        assert row is not None, "idx_jobs_nzo_url index not found"
 
         await database.close()

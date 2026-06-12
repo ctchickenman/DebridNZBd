@@ -290,7 +290,7 @@ Safety nets at multiple layers ensure CDN URLs never leak:
 
 ## Duplicate Detection and Cache-Aware Re-Download
 
-When a download request is received, DebridNZBd checks the history table for a matching entry before submitting to Torbox. This avoids creating duplicate downloads and leverages cached content.
+When a download request is received, DebridNZBd checks both the active `jobs` table and the `history` table for matching entries before submitting to Torbox. This avoids creating duplicate downloads and leverages cached content.
 
 ### Configuration
 
@@ -298,19 +298,29 @@ When a download request is received, DebridNZBd checks the history table for a m
 |---|---|---|---|
 | `switches` | `duplicate_detection` | `0` | Enable duplicate detection (`1` = enabled, `0` = disabled) |
 
-When disabled (default), all requests proceed to Torbox without checking history.
+When disabled (default), all requests proceed to Torbox without checking for duplicates.
 
 ### Detection Logic
 
+The check happens in two stages — **active jobs first, then history**:
+
+1. **Active jobs check** (`jobs` table): If a download with the same URL or hash is currently in the queue (any status), return `duplicate_active` with the existing nzo_id. No new Torbox submission is created and the existing job ID is returned to the client. For `Complete` jobs with a file on disk, returns `reuse_local` instead.
+
+2. **History check** (`history` table): If no active match, search completed/failed downloads.
+
 For **URL submissions** (`?mode=addurl`), the check happens *before* Torbox submission:
 1. Normalize the URL (lowercase scheme/host, sort query params, strip trailing `/`)
-2. Query `history` table for exact URL match (by type: usenet/torrent/webdl)
-3. If found → check local disk, then CDN availability
+2. Query `jobs` table for exact URL match (by type: usenet/torrent/webdl)
+3. If found in jobs → return `duplicate_active` (or `reuse_local` if Complete with file on disk)
+4. If not in jobs → query `history` table for exact URL match
+5. If found in history → check local disk, then CDN availability
 
 For **file uploads** (`?mode=addfile` with `.torrent` files), the check happens *after* Torbox submission:
 1. Torbox returns the torrent info hash from the upload response
-2. Query `history` table for matching `torbox_hash` (case-insensitive)
-3. If found → check local disk, then CDN availability
+2. Query `jobs` table for matching `torbox_hash` (case-insensitive)
+3. If found in jobs → delete the duplicate from Torbox, return existing nzo_id
+4. If not in jobs → query `history` table for matching `torbox_hash`
+5. If found in history → check local disk, then CDN availability
 
 NZB file uploads skip duplicate detection (no reliable hash for dedup).
 
@@ -318,12 +328,14 @@ NZB file uploads skip duplicate detection (no reliable hash for dedup).
 
 | Condition | Action | Job Created |
 |---|---|---|
-| File on local disk | `reuse_local` | Job with status `Complete`, `local_path` set |
-| Not on disk, cached on CDN | `redownload_cdn` | Job with status `Fetching`, CDN processor re-downloads |
-| Not on disk, not on CDN | `resubmit` | Normal Torbox submission proceeds |
-| Not in history | `new` | Normal Torbox submission proceeds |
+| Active download in queue | `duplicate_active` | None — existing nzo_id returned |
+| Complete download with file on disk (jobs table) | `reuse_local` | None — existing nzo_id returned |
+| File on local disk (history) | `reuse_local` | New job with status `Complete`, `local_path` set |
+| Not on disk, cached on CDN (history) | `redownload_cdn` | New job with status `Fetching`, CDN processor re-downloads |
+| Not on disk, not on CDN (history) | `resubmit` | Normal Torbox submission proceeds |
+| Not in jobs or history | `new` | Normal Torbox submission proceeds |
 
-For `reuse_local` and `redownload_cdn` with file uploads, the duplicate Torbox download is deleted before creating the local job.
+For `duplicate_active` with file uploads, the newly submitted duplicate is deleted from Torbox before returning the existing nzo_id.
 
 ### URL Normalization
 
