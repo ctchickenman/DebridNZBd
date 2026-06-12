@@ -52,6 +52,7 @@ from debridnzbd.api.config import (
     handle_del_config,
     handle_get_cats,
     handle_get_scripts,
+    handle_reset_database,
 )
 from debridnzbd.utils.version import VERSION
 
@@ -248,6 +249,7 @@ MODE_HANDLERS: dict[str, callable] = {
     "del_config": handle_del_config,
     "get_cats": handle_get_cats,
     "get_scripts": handle_get_scripts,
+    "reset_database": handle_reset_database,
     # Not yet implemented:
     # "addfile": handle_addfile,
     # "addlocalfile": handle_addlocalfile,

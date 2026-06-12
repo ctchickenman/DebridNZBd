@@ -187,6 +187,15 @@
     <button type="submit" class="btn btn-primary" style="padding:8px 24px;">Save Changes</button>
   </div>
 
+  <!-- Danger Zone -->
+  <div class="card" style="margin-top:32px; border-color:#dc3545;">
+    <div class="card-header" style="background:#dc3545; color:white;">⚠ Danger Zone</div>
+    <div class="card-body">
+      <p style="margin-bottom:12px;">Reset all download history and queue data. Your configuration settings (credentials, folders, categories, etc.) will be preserved.</p>
+      <button type="button" class="btn btn-danger" onclick="apiAction('reset_database', {}, function() { window.location.href = '/'; }, {confirm: 'This will delete all download history and queue data. Your settings will be preserved. Continue?', successMsg: 'Database reset', errorMsg: 'Reset failed'})">Reset Database</button>
+    </div>
+  </div>
+
 </form>
 
 {% endblock %}

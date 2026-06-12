@@ -215,3 +215,29 @@ async def handle_get_scripts(params: dict) -> JSONResponse:
     """
     response = ScriptsResponse(scripts=[])
     return JSONResponse(content=response.model_dump())
+
+
+async def handle_reset_database(params: dict) -> JSONResponse:
+    """Handle ?mode=reset_database — reset download data, keep config.
+
+    Clears all rows from the jobs, history, and warnings tables
+    (download queue, completed downloads, and active warnings).
+    Preserves all configuration settings stored in the config,
+    categories, sorters, and schedules tables.
+    """
+    request = params.get("request")
+    db = getattr(request.app.state, "db", None) if request else None
+
+    if db is None or db.conn is None:
+        return JSONResponse(
+            content={"status": False, "error": "Database not available"},
+        )
+
+    # Delete all rows from download-data tables.
+    # Config tables (config, categories, sorters, schedules) are preserved.
+    for table in ("jobs", "history", "warnings"):
+        cursor = await db.conn.execute(f"DELETE FROM {table}")
+        logger.info("Reset database: deleted %d rows from %s", cursor.rowcount, table)
+    await db.conn.commit()
+
+    return JSONResponse(content={"status": True})
