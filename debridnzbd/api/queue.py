@@ -1374,6 +1374,13 @@ async def handle_queue(params: dict) -> JSONResponse:
         script = row[5] or "Default"
         priority = row[6] or 0
         status = row[8] or "Queued"
+        # Map internal status to SABnzbd queue status names.
+        # *arr clients parse status via SabnzbdDownloadStatus enum which
+        # expects "Completed" (with "d"), not "Complete".
+        if status == "Complete":
+            status = "Completed"
+        elif status == "Failed":
+            status = "Failed"
         size = row[9] or 0
         sizeleft = row[10] or 0
         percentage = row[11] or 0

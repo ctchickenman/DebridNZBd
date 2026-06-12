@@ -90,8 +90,10 @@ async def handle_history(params: dict) -> JSONResponse:
         fail_message = row[14] or ""
         url = row[18] or ""
 
-        # Map status to SABnzbd conventions
-        sab_status = "Completed" if status == "Completed" else "Failed"
+        # Map status to SABnzbd conventions.
+        # The database stores "Complete" (no trailing "d") but *arr clients
+        # expect "Completed" per the SabnzbdDownloadStatus enum.
+        sab_status = "Completed" if status in ("Complete", "Completed") else "Failed"
 
         slots.append(HistorySlot(
             fail_message=fail_message,
