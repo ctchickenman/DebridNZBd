@@ -59,7 +59,7 @@ async def _find_jobs_by_hashes(
         f"""SELECT nzo_id, filename, nzo_url, category, priority, status,
                    size, sizeleft, percentage, time_added, time_completed,
                    torbox_id, torbox_type, torbox_hash, speed, tags, position,
-                   stalled_since
+                   stalled_since, local_path
             FROM jobs
             WHERE LOWER(torbox_hash) IN ({placeholders})
                OR nzo_id IN ({placeholders})""",
@@ -118,7 +118,7 @@ async def torrents_info(
         """SELECT nzo_id, filename, nzo_url, category, priority, status,
                   size, sizeleft, percentage, time_added, time_completed,
                   torbox_id, torbox_type, torbox_hash, speed, tags, position,
-                  stalled_since
+                  stalled_since, local_path
            FROM jobs WHERE torbox_type = 'torrent' ORDER BY position"""
     )
 
@@ -493,6 +493,7 @@ async def torrents_properties(
     nzo_id, filename, nzo_url, category, priority, status = row[:6]
     size, sizeleft, percentage, time_added, time_completed = row[6:11]
     torbox_id, torbox_type, torbox_hash, speed, tags = row[11:16]
+    local_path = row[17] if len(row) > 17 else ""
 
     save_path = str(Path(
         await config.get("folders", "complete_dir", "downloads/complete")
@@ -511,8 +512,15 @@ async def torrents_properties(
     ratio = 0.0
     elapsed = (time.time() - time_added) if time_added else 0
 
+    # Use local_path for save_path if the file has been downloaded,
+    # so *arr clients can find the actual file location.
+    if local_path:
+        resolved_save_path = str(Path(local_path).parent.resolve()) if local_path else save_path
+    else:
+        resolved_save_path = save_path
+
     props = {
-        "save_path": save_path,
+        "save_path": resolved_save_path,
         "creation_date": int(time_added) if time_added else 0,
         "piece_size": 0,
         "comment": "",

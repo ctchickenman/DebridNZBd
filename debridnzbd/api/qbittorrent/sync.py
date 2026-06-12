@@ -64,7 +64,7 @@ async def sync_maindata(
         """SELECT nzo_id, filename, nzo_url, category, priority, status,
                   size, sizeleft, percentage, time_added, time_completed,
                   torbox_id, torbox_type, torbox_hash, speed, tags, position,
-                  stalled_since
+                  stalled_since, local_path
            FROM jobs WHERE torbox_type = 'torrent' ORDER BY position"""
     )
 

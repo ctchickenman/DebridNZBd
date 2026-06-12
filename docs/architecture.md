@@ -77,9 +77,25 @@ When a download stalls (no progress for 60+ seconds), the state sync poller auto
 
 1. **First retry** — Checks if the download is available on CDN (completed/cached/seeding on Torbox). If CDN-available, transitions the job to Fetching so the CDN processor re-downloads. If not CDN-available, sends Reannounce (torrents) or Resume (usenet) to Torbox. WebDL skips directly to step 2.
 2. **Second retry** — Deletes the download from Torbox and re-submits the original URL, creating a new job.
-3. **Give up** — After the third stall, marks the job as Failed and moves to history.
+3. **Give up** — After the third stall, marks the job as Failed.
 
 Each retry resets the 60-second stall timer. The `retry_stalled` API mode (`?mode=retry_stalled&nzo_id=XXX`) provides manual CDN-aware retry: it checks Torbox availability by ID, corrects the job type if needed, and takes the best recovery action. The web UI shows a Retry button (↻) for stalled downloads with the stall duration displayed.
+
+### Queue Complete Grace Period
+
+When a download completes or fails, the job stays in the active queue for a configurable grace period before being moved to history. This gives download clients (*arr, qBittorrent) time to observe the completed state and grab the file path before the job disappears from the active queue.
+
+**Configuration:** `switches.queue_complete` — seconds to keep completed/failed jobs in the queue (default: `300` = 5 minutes). Set to `0` for immediate move to history (old behavior).
+
+**How it works:**
+1. When a download completes, the state sync poller sets `status = "Complete"` (or `"uploading"` in qBittorrent API) and `time_completed = now`, but does NOT move the job to history immediately.
+2. On each subsequent poll cycle, the poller checks for jobs whose `time_completed` is older than `queue_complete` seconds.
+3. Expired jobs are moved to history by `_move_to_history()`.
+4. The qBittorrent API reports `content_path` using the actual `local_path` from the database, so *arr clients can find the downloaded file even before it moves to history.
+
+**Why this matters:**
+- qBittorrent API only queries the `jobs` table, not `history`. Without the grace period, completed torrents vanish from the qBittorrent API immediately, causing *arr clients to treat them as failed.
+- SABnzbd API clients check both queue and history, but the grace period ensures the job appears in the queue with `status = "Complete"` before moving to history.
 
 ### CDN Availability Check
 

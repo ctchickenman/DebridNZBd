@@ -273,6 +273,36 @@ async def run_state_sync(app: FastAPI, cancelled: asyncio.Event) -> None:
         finally:
             await client.close()
 
+        # Move completed/failed jobs to history after the grace period.
+        # This gives download clients (*arr, qBittorrent) time to observe
+        # the completed state before the job disappears from the active queue.
+        # When queue_complete is 0, jobs are moved immediately (old behavior).
+        try:
+            queue_complete = await config.get_int("switches", "queue_complete", 300)
+            now = time.time()
+
+            if queue_complete <= 0:
+                # Immediate move — find all completed/failed jobs
+                cursor = await db.conn.execute(
+                    "SELECT nzo_id FROM jobs "
+                    "WHERE status IN ('Complete', 'Failed') AND time_completed > 0"
+                )
+            else:
+                # Grace period — only move jobs older than queue_complete seconds
+                cutoff = now - queue_complete
+                cursor = await db.conn.execute(
+                    "SELECT nzo_id FROM jobs "
+                    "WHERE status IN ('Complete', 'Failed') "
+                    "AND time_completed > 0 AND time_completed < ?",
+                    (cutoff,),
+                )
+
+            expired = await cursor.fetchall()
+            for (nzo_id,) in expired:
+                await _move_to_history(db, nzo_id, now)
+        except Exception:
+            logger.exception("State sync: error moving expired jobs to history")
+
         # Wait for the next poll interval, but check cancelled every second
         for _ in range(max(poll_interval, 1)):
             if cancelled.is_set():
@@ -932,8 +962,10 @@ async def _complete_job(
         logger.exception("State sync: failed to mark %s complete", nzo_id)
         return
 
-    # Move to history
-    await _move_to_history(db, nzo_id, now)
+    # Note: the job is NOT moved to history here. The state sync poller will
+    # move it after the queue_complete grace period expires. This gives
+    # download clients (*arr, qBittorrent) time to observe the completed
+    # state before the job disappears from the active queue.
 
 
 async def _fail_job(
@@ -942,7 +974,12 @@ async def _fail_job(
     torbox_status: str,
     now: float,
 ) -> None:
-    """Mark a job as failed and move it to history."""
+    """Mark a job as failed.
+
+    The job stays in the queue so download clients can see the failure.
+    The state sync poller will move it to history after the queue_complete
+    grace period expires.
+    """
     try:
         await db.conn.execute(
             "UPDATE jobs SET status = ?, fail_message = ?, time_completed = ? "
@@ -955,22 +992,32 @@ async def _fail_job(
         logger.exception("State sync: failed to mark %s as failed", nzo_id)
         return
 
-    await _move_to_history(db, nzo_id, now)
+    # Note: the job is NOT moved to history here. The state sync poller will
+    # move it after the queue_complete grace period expires.
 
 
-async def _move_to_history(db: object, nzo_id: str, now: float) -> None:
-    """Move a completed/failed job from jobs to history table."""
+async def _move_to_history(db: object, nzo_id: str, now: float = 0) -> None:
+    """Move a completed/failed job from jobs to history table.
+
+    Args:
+        db: Database instance.
+        nzo_id: The job ID to move.
+        now: Current timestamp. If 0, uses the job's time_completed field.
+    """
     try:
         # Read the job row
         cursor = await db.conn.execute(
             "SELECT nzo_id, filename, status, size, category, "
             "time_added, download_time, cdn_link, torbox_id, torbox_type, "
-            "fail_message, nzo_url, local_path, torbox_hash FROM jobs WHERE nzo_id = ?",
+            "fail_message, nzo_url, local_path, torbox_hash, time_completed FROM jobs WHERE nzo_id = ?",
             (nzo_id,),
         )
         row = await cursor.fetchone()
         if row is None:
             return
+
+        # Use the job's time_completed if available, otherwise fall back to now
+        completed_time = row[14] or now or time.time()
 
         # Insert into history
         await db.conn.execute(
@@ -985,7 +1032,7 @@ async def _move_to_history(db: object, nzo_id: str, now: float) -> None:
                 row[3],   # size
                 row[4],   # category
                 row[6] or 0,  # download_time
-                now,      # completed
+                completed_time,  # completed
                 row[5],   # time_added
                 row[7] or row[11] or "",  # storage: cdn_link or nzo_url
                 row[8],   # torbox_id

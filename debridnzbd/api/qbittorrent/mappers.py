@@ -81,6 +81,10 @@ def build_torrent_info(
     torbox_id, torbox_type, torbox_hash, speed, tags, position,
     stalled_since
 
+    Optionally, an 18th column ``local_path`` may be included. When
+    present and non-empty, it is used as the ``content_path`` so that
+    *arr clients can find the actual downloaded file.
+
     Args:
         row: Database row tuple.
         save_path: Absolute path to the download directory. *arr clients
@@ -89,12 +93,23 @@ def build_torrent_info(
             are set to empty strings for backward compatibility.
         torbox_type: The download type for hash synthesis.
     """
-    (
-        nzo_id, filename, nzo_url, category, priority, status,
-        size, sizeleft, percentage, time_added, time_completed,
-        torbox_id, torbox_type_val, torbox_hash, speed, tags,
-        position, stalled_since,
-    ) = row
+    # Unpack row — local_path is an optional 18th column
+    if len(row) >= 18:
+        (
+            nzo_id, filename, nzo_url, category, priority, status,
+            size, sizeleft, percentage, time_added, time_completed,
+            torbox_id, torbox_type_val, torbox_hash, speed, tags,
+            position, stalled_since, local_path,
+        ) = row
+        local_path = local_path or ""
+    else:
+        (
+            nzo_id, filename, nzo_url, category, priority, status,
+            size, sizeleft, percentage, time_added, time_completed,
+            torbox_id, torbox_type_val, torbox_hash, speed, tags,
+            position, stalled_since,
+        ) = row
+        local_path = ""
 
     info_hash = get_torrent_hash(torbox_hash or "", nzo_id, torbox_type_val)
     qbit_state = debrid_status_to_qbit(status, speed, stalled_since or 0)
@@ -122,7 +137,7 @@ def build_torrent_info(
         "added_on": int(time_added) if time_added else 0,
         "completion_on": int(time_completed) if time_completed and time_completed > 0 else -1,
         "save_path": save_path,
-        "content_path": f"{save_path}/{filename}" if save_path and filename else save_path,
+        "content_path": local_path if local_path else (f"{save_path}/{filename}" if save_path and filename else save_path),
         "num_seeds": 0,
         "num_leechs": 0,
         "num_complete": 0,

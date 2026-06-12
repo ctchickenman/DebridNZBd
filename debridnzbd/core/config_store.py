@@ -155,6 +155,7 @@ CONFIG_DEFAULTS: dict[str, dict[str, str]] = {
         "max_retries": "3",
         "disconnect_on_empty": "0",
         "propagation_delay": "0",
+        "queue_complete": "300",
         "duplicate_detection": "0",
         "smart_duplicate_detection": "0",
         "allow_proper": "0",

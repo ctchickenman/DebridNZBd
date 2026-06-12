@@ -1170,44 +1170,21 @@ async def provider_download(request: Request) -> JSONResponse:
                         logger.exception("Provider download: CDN download failed for %s — CDN link stored as fallback", nzo_id)
                         local_path = None
 
-                # Mark complete and move to history
+                # Mark complete — the state sync poller will move to history
+                # after the queue_complete grace period expires. This gives
+                # download clients time to observe the completed state.
                 await db.conn.execute(
                     "UPDATE jobs SET status = ?, cdn_link = ?, local_path = ?, percentage = 100, "
                     "sizeleft = 0, time_completed = ? WHERE nzo_id = ?",
                     ("Complete", cdn_link, local_path or "", now, nzo_id),
                 )
                 await db.conn.commit()
+                logger.info("Provider download: completed %s — local_path=%s", nzo_id, local_path or "none")
 
-                # Move to history
-                cursor = await db.conn.execute(
-                    "SELECT nzo_id, filename, status, size, category, "
-                    "time_added, download_time, cdn_link, torbox_id, torbox_type, "
-                    "fail_message, nzo_url, local_path FROM jobs WHERE nzo_id = ?",
-                    (nzo_id,),
-                )
-                row = await cursor.fetchone()
-                if row:
-                    await db.conn.execute(
-                        """INSERT OR IGNORE INTO history
-                        (nzo_id, name, status, size, category, download_time,
-                         completed, time_added, storage, torbox_id, torbox_type,
-                         fail_message, nzo_url, path)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            row[0], row[1], row[2], row[3], row[4],
-                            row[6] or 0, now, row[5],
-                            row[7] or row[11] or "",  # storage: cdn_link or nzo_url
-                            row[8], row[9], row[10] or "", row[11] or "",
-                            row[12] or "",  # path: local_path
-                        ),
-                    )
-                    await db.conn.execute("DELETE FROM jobs WHERE nzo_id = ?", (nzo_id,))
-                    await db.conn.commit()
-                    logger.info("Provider download: completed %s — moved to history", nzo_id)
-
-                # Update tracking: moved from jobs to history
-                tracked_jobs.discard(torbox_key)
-                tracked_history.add(torbox_key)
+                # Update tracking: job stays in the jobs table — the state sync
+                # poller will move it to history after the queue_complete grace period.
+                # Keep it in tracked_jobs so subsequent requests know it's still active.
+                tracked_jobs.add(torbox_key)
             except Exception:
                 logger.exception(
                     "Provider download: error completing job %s — "

@@ -245,6 +245,25 @@ In the web UI, a Retry button (↻) is available on all non-terminal downloads:
 
 The automatic stall retry (first attempt at 60s) also checks CDN availability before sending Reannounce.
 
+## Queue Complete Grace Period
+
+When a download completes or fails, DebridNZBd keeps the job in the active queue for a configurable grace period before moving it to history. This gives download clients (*arr, qBittorrent) time to observe the completed state and grab the file path before the job disappears.
+
+### Configuration
+
+| Section | Key | Default | Description |
+|---|---|---|---|
+| `switches` | `queue_complete` | `300` | Seconds to keep completed/failed jobs in the queue before moving to history. Set to `0` for immediate move (old behavior). |
+
+### Behavior
+
+- When `queue_complete > 0` (default 300 = 5 minutes): Completed jobs stay in the queue with `status = "Complete"` (or `"uploading"` in qBittorrent API) until the grace period expires, then are moved to history by the state sync poller.
+- When `queue_complete = 0`: Jobs are moved to history immediately after completion, same as the old behavior.
+- The state sync poller checks for expired jobs every cycle and moves them to history.
+- For SABnzbd API: *arr clients see the download complete in the queue, then see it in history after the grace period.
+- For qBittorrent API: Torrents show as `"uploading"` (complete) with the correct `content_path` pointing to the downloaded file, then vanish after the grace period.
+- `content_path` in the qBittorrent API uses the actual `local_path` from the database when available, falling back to `{save_path}/{filename}` for jobs still downloading.
+
 ## Duplicate Detection and Cache-Aware Re-Download
 
 When a download request is received, DebridNZBd checks the history table for a matching entry before submitting to Torbox. This avoids creating duplicate downloads and leverages cached content.
