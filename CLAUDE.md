@@ -260,9 +260,23 @@ When a download completes or fails, DebridNZBd keeps the job in the active queue
 - When `queue_complete > 0` (default 300 = 5 minutes): Completed jobs stay in the queue with `status = "Complete"` (or `"uploading"` in qBittorrent API) until the grace period expires, then are moved to history by the state sync poller.
 - When `queue_complete = 0`: Jobs are moved to history immediately after completion, same as the old behavior.
 - The state sync poller checks for expired jobs every cycle and moves them to history.
-- For SABnzbd API: *arr clients see the download complete in the queue, then see it in history after the grace period.
+- For SABnzbd API: *arr clients see the download complete in the queue (with `storage` and `path` fields pointing to the local file), then see it in history after the grace period.
 - For qBittorrent API: Torrents show as `"uploading"` (complete) with the correct `content_path` pointing to the downloaded file, then vanish after the grace period.
 - `content_path` in the qBittorrent API uses the actual `local_path` from the database when available, falling back to `{save_path}/{filename}` for jobs still downloading.
+
+### Output Path Handling
+
+All API responses that expose file paths (`storage`, `path`, `content_path`, `save_path`) use the local disk path — **never** the Torbox CDN URL. CDN links are an internal implementation detail used only to download files to disk; they must not be exposed to download clients.
+
+The queue and history responses both include `storage` (full file path) and `path` (parent directory). The `storage` field in particular is what *arr clients read to locate the downloaded file. These fields are derived from `local_path` in the jobs table, which is set by the CDN downloader after a successful download to disk.
+
+Safety nets at multiple layers ensure CDN URLs never leak:
+1. **Database migration 006**: Clears any CDN URLs (`http://` or `https://` prefixes) from the `storage` and `path` columns in the history table.
+2. **`_move_to_history()`**: Strips CDN URLs from `local_path` before writing to `storage` and `path`.
+3. **API responses**: All endpoints strip CDN URLs from path fields before returning them.
+4. **Web UI**: Templates display `storage` as "Output" (not "CDN Link").
+
+When `local_path` is empty (download not yet complete or CDN download failed), `storage` and `path` are empty strings — *arr clients interpret this as "file not yet available on disk."
 
 ## Duplicate Detection and Cache-Aware Re-Download
 

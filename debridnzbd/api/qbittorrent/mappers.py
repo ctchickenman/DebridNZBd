@@ -111,6 +111,10 @@ def build_torrent_info(
         ) = row
         local_path = ""
 
+    # Safety net: never expose CDN URLs as file paths.
+    if local_path.startswith(("http://", "https://")):
+        local_path = ""
+
     info_hash = get_torrent_hash(torbox_hash or "", nzo_id, torbox_type_val)
     qbit_state = debrid_status_to_qbit(status, speed, stalled_since or 0)
     dloaded = size - sizeleft

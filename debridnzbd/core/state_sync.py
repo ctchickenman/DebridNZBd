@@ -1019,6 +1019,15 @@ async def _move_to_history(db: object, nzo_id: str, now: float = 0) -> None:
         # Use the job's time_completed if available, otherwise fall back to now
         completed_time = row[14] or now or time.time()
 
+        # storage and path must always be local disk paths — never CDN URLs.
+        # Strip any http(s):// value as a safety net; these are internal Torbox
+        # links that must not be exposed to *arr clients as output paths.
+        local_path = row[12] or ""
+        if local_path.startswith(("http://", "https://")):
+            logger.warning("State sync: local_path for %s is a CDN URL — clearing it", nzo_id)
+            local_path = ""
+        storage = local_path
+
         # Insert into history
         await db.conn.execute(
             """INSERT OR IGNORE INTO history
@@ -1034,12 +1043,12 @@ async def _move_to_history(db: object, nzo_id: str, now: float = 0) -> None:
                 row[6] or 0,  # download_time
                 completed_time,  # completed
                 row[5],   # time_added
-                row[12] or "",  # storage: local_path (on disk) — never expose CDN URL to clients
+                storage,  # storage: local disk path — never a CDN URL
                 row[8],   # torbox_id
                 row[9],   # torbox_type
                 row[10] or "",  # fail_message
                 row[11] or "",  # nzo_url
-                row[12] or "",  # path: local_path
+                local_path,  # path: local disk path
                 row[13] or "",  # torbox_hash
             ),
         )

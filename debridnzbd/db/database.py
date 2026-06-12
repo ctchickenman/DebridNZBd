@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Current schema version — used to determine which migrations to run.
 # Increment this when adding new migrations.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class Database:
@@ -486,6 +486,39 @@ class Database:
         )
         await self.conn.commit()
         logger.info("Migration 005: Ensured idx_history_torbox_hash index exists")
+
+    async def _migration_006(self) -> None:
+        """Clear CDN URLs from storage and path columns in history.
+
+        Previous versions stored Torbox CDN links (https://...) in the
+        storage and path columns.  The SABnzbd API uses these fields as
+        the on-disk output path that *arr clients read to locate
+        downloaded files.  A CDN URL is never a valid local path, so
+        this migration replaces any http(s) URL in those columns with
+        an empty string, ensuring clients never see a CDN link where a
+        disk path belongs.
+        """
+        # Replace CDN URLs in storage with empty string
+        cursor = await self.conn.execute(
+            "UPDATE history SET storage = '' "
+            "WHERE storage LIKE 'http://%' OR storage LIKE 'https://%'"
+        )
+        await self.conn.commit()
+        if cursor.rowcount:
+            logger.info("Migration 006: Cleared %d CDN URLs from history.storage", cursor.rowcount)
+        else:
+            logger.info("Migration 006: No CDN URLs found in history.storage")
+
+        # Replace CDN URLs in path with empty string
+        cursor = await self.conn.execute(
+            "UPDATE history SET path = '' "
+            "WHERE path LIKE 'http://%' OR path LIKE 'https://%'"
+        )
+        await self.conn.commit()
+        if cursor.rowcount:
+            logger.info("Migration 006: Cleared %d CDN URLs from history.path", cursor.rowcount)
+        else:
+            logger.info("Migration 006: No CDN URLs found in history.path")
 
 
 # ------------------------------------------------------------------ #

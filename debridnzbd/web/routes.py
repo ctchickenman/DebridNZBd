@@ -485,8 +485,8 @@ async def index(request: Request) -> HTMLResponse:
                     "category": row[4] or "*",
                     "download_time": _format_duration(row[5] or 0),
                     "completed": _format_timestamp(row[6]) if row[6] else "—",
-                    "storage": row[7] or "",
-                    "path": row[9] or "",
+                    "storage": "" if (row[7] or "").startswith(("http://", "https://")) else (row[7] or ""),
+                    "path": "" if (row[9] or "").startswith(("http://", "https://")) else (row[9] or ""),
                     "fail_message": row[8] or "",
                 })
 
@@ -535,8 +535,8 @@ async def history_page(request: Request) -> HTMLResponse:
                 "size": _format_size(row[3] or 0), "category": row[4] or "*",
                 "download_time": _format_duration(row[5] or 0),
                 "completed": _format_timestamp(row[6]) if row[6] else "—",
-                "storage": row[7] or "",
-                "path": row[9] or "",
+                "storage": "" if (row[7] or "").startswith(("http://", "https://")) else (row[7] or ""),
+                "path": "" if (row[9] or "").startswith(("http://", "https://")) else (row[9] or ""),
                 "fail_message": row[8] or "",
             })
 

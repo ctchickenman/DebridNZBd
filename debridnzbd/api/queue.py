@@ -1388,6 +1388,7 @@ async def handle_queue(params: dict) -> JSONResponse:
         avg_age = row[13] or ""
         speed = row[24] or 0
         stalled_since = row[26] or 0
+        local_path = row[20] or ""
 
         total_speed += speed
         total_size += size
@@ -1412,6 +1413,19 @@ async def handle_queue(params: dict) -> JSONResponse:
         else:
             stall_duration = ""
 
+        # Compute the output path for *arr clients.
+        # storage = the file's full local path (on disk), never a CDN URL.
+        # path    = the parent directory of the file.
+        # When local_path is empty (download not yet complete or CDN download
+        # failed), both fields are left empty so clients know the file isn't
+        # available on disk yet.
+        # Safety net: strip any CDN URL that should not be exposed to clients.
+        if local_path.startswith(("http://", "https://")):
+            local_path = ""
+        storage = local_path
+        from pathlib import Path as _Path
+        path = str(_Path(local_path).parent) if local_path else ""
+
         slots.append(QueueSlot(
             status=status,
             index=0,  # Will be set after filtering
@@ -1434,6 +1448,8 @@ async def handle_queue(params: dict) -> JSONResponse:
             unpackopts="",
             stalled=stalled,
             stall_duration=stall_duration,
+            storage=storage,
+            path=path,
         ))
 
     # Apply pagination

@@ -495,6 +495,10 @@ async def torrents_properties(
     torbox_id, torbox_type, torbox_hash, speed, tags = row[11:16]
     local_path = row[17] if len(row) > 17 else ""
 
+    # Safety net: never expose CDN URLs as file paths.
+    if local_path.startswith(("http://", "https://")):
+        local_path = ""
+
     save_path = str(Path(
         await config.get("folders", "complete_dir", "downloads/complete")
     ).resolve())

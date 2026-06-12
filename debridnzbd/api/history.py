@@ -83,6 +83,13 @@ async def handle_history(params: dict) -> JSONResponse:
         pp = str(row[5]) if row[5] else ""
         storage = row[6] or ""
         path = row[7] or ""
+
+        # Safety net: never expose CDN URLs as output paths.
+        # These are internal Torbox links that *arr clients must not see.
+        if storage.startswith(("http://", "https://")):
+            storage = ""
+        if path.startswith(("http://", "https://")):
+            path = ""
         download_time = int(row[8] or 0)
         postproc_time = int(row[9] or 0)
         completed = int(row[11] or 0)

@@ -78,6 +78,8 @@ class QueueSlot(BaseModel):
     unpackopts: str = ""
     stalled: bool = False
     stall_duration: str = ""
+    storage: str = ""
+    path: str = ""
 
     @field_serializer("password")
     @classmethod
