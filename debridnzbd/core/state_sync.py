@@ -1034,7 +1034,7 @@ async def _move_to_history(db: object, nzo_id: str, now: float = 0) -> None:
                 row[6] or 0,  # download_time
                 completed_time,  # completed
                 row[5],   # time_added
-                row[7] or row[11] or "",  # storage: cdn_link or nzo_url
+                row[12] or row[7] or row[11] or "",  # storage: local_path (on disk) or cdn_link or nzo_url
                 row[8],   # torbox_id
                 row[9],   # torbox_type
                 row[10] or "",  # fail_message
