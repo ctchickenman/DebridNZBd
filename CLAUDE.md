@@ -23,7 +23,7 @@ debridnzbd/
   __main__.py          # Entry point: python -m debridnzbd
   api/
     router.py          # Main ?mode=XXX dispatcher
-    queue.py           # Queue API modes (addurl, addfile, queue, pause, etc.)
+    queue.py           # Queue API modes + duplicate detection (addurl, addfile, queue, pause, etc.)
     history.py         # History API modes
     status.py          # Status API modes
     config.py          # Config API modes
@@ -39,7 +39,7 @@ debridnzbd/
       transfer.py      # Speed limits, global transfer stats
   core/
     config_store.py    # Config read/write with defaults
-    state_sync.py      # Background Torbox state poller + orphan reconciliation
+    state_sync.py      # Background Torbox state poller + orphan reconciliation + CDN availability check
     cdn_downloader.py  # CDN file downloader with concurrency semaphore
   torbox/
     client.py          # Async httpx client for Torbox API
@@ -244,6 +244,47 @@ In the web UI, a Retry button (↻) is available on all non-terminal downloads:
 - **Other active** downloads (Downloading, Queued, Paused): subtle outline button with "Retry download" tooltip
 
 The automatic stall retry (first attempt at 60s) also checks CDN availability before sending Reannounce.
+
+## Duplicate Detection and Cache-Aware Re-Download
+
+When a download request is received, DebridNZBd checks the history table for a matching entry before submitting to Torbox. This avoids creating duplicate downloads and leverages cached content.
+
+### Configuration
+
+| Section | Key | Default | Description |
+|---|---|---|---|
+| `switches` | `duplicate_detection` | `0` | Enable duplicate detection (`1` = enabled, `0` = disabled) |
+
+When disabled (default), all requests proceed to Torbox without checking history.
+
+### Detection Logic
+
+For **URL submissions** (`?mode=addurl`), the check happens *before* Torbox submission:
+1. Normalize the URL (lowercase scheme/host, sort query params, strip trailing `/`)
+2. Query `history` table for exact URL match (by type: usenet/torrent/webdl)
+3. If found → check local disk, then CDN availability
+
+For **file uploads** (`?mode=addfile` with `.torrent` files), the check happens *after* Torbox submission:
+1. Torbox returns the torrent info hash from the upload response
+2. Query `history` table for matching `torbox_hash` (case-insensitive)
+3. If found → check local disk, then CDN availability
+
+NZB file uploads skip duplicate detection (no reliable hash for dedup).
+
+### Actions
+
+| Condition | Action | Job Created |
+|---|---|---|
+| File on local disk | `reuse_local` | Job with status `Complete`, `local_path` set |
+| Not on disk, cached on CDN | `redownload_cdn` | Job with status `Fetching`, CDN processor re-downloads |
+| Not on disk, not on CDN | `resubmit` | Normal Torbox submission proceeds |
+| Not in history | `new` | Normal Torbox submission proceeds |
+
+For `reuse_local` and `redownload_cdn` with file uploads, the duplicate Torbox download is deleted before creating the local job.
+
+### URL Normalization
+
+`normalize_url()` lowercases the scheme and host, strips trailing slashes, and sorts query parameters. This ensures `?a=1&b=2` matches `?b=2&a=1`.
 
 ### Speed Tracking
 

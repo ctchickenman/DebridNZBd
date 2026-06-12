@@ -965,7 +965,7 @@ async def _move_to_history(db: object, nzo_id: str, now: float) -> None:
         cursor = await db.conn.execute(
             "SELECT nzo_id, filename, status, size, category, "
             "time_added, download_time, cdn_link, torbox_id, torbox_type, "
-            "fail_message, nzo_url, local_path FROM jobs WHERE nzo_id = ?",
+            "fail_message, nzo_url, local_path, torbox_hash FROM jobs WHERE nzo_id = ?",
             (nzo_id,),
         )
         row = await cursor.fetchone()
@@ -976,8 +976,8 @@ async def _move_to_history(db: object, nzo_id: str, now: float) -> None:
         await db.conn.execute(
             """INSERT OR IGNORE INTO history
             (nzo_id, name, status, size, category, download_time,
-             completed, time_added, storage, torbox_id, torbox_type, fail_message, nzo_url, path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             completed, time_added, storage, torbox_id, torbox_type, fail_message, nzo_url, path, torbox_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 row[0],   # nzo_id
                 row[1],   # filename → name
@@ -993,6 +993,7 @@ async def _move_to_history(db: object, nzo_id: str, now: float) -> None:
                 row[10] or "",  # fail_message
                 row[11] or "",  # nzo_url
                 row[12] or "",  # path: local_path
+                row[13] or "",  # torbox_hash
             ),
         )
 

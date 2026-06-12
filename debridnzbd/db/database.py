@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Current schema version — used to determine which migrations to run.
 # Increment this when adding new migrations.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class Database:
@@ -460,6 +460,32 @@ class Database:
             logger.info("Migration 004: Added stall_retries column to jobs table")
         else:
             logger.info("Migration 004: stall_retries column already exists, skipping")
+
+    async def _migration_005(self) -> None:
+        """Add torbox_hash column to history table.
+
+        The torbox_hash column stores the torrent info hash so that
+        duplicate file uploads can be detected by matching against
+        history entries. An index enables fast lookups.
+        """
+        # Check if column already exists (idempotent migration)
+        cursor = await self.conn.execute("PRAGMA table_info(history)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        if "torbox_hash" not in columns:
+            await self.conn.execute(
+                "ALTER TABLE history ADD COLUMN torbox_hash TEXT DEFAULT ''"
+            )
+            await self.conn.commit()
+            logger.info("Migration 005: Added torbox_hash column to history table")
+        else:
+            logger.info("Migration 005: torbox_hash column already exists, skipping")
+
+        # Add index on torbox_hash for fast hash-based lookups
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_history_torbox_hash ON history(torbox_hash)"
+        )
+        await self.conn.commit()
+        logger.info("Migration 005: Ensured idx_history_torbox_hash index exists")
 
 
 # ------------------------------------------------------------------ #
