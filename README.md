@@ -21,6 +21,7 @@ DebridNZBd also implements the qBittorrent WebUI API, allowing 3rd-party torrent
 - **Queue management** — Pause, resume, reorder, categorize downloads
 - **History tracking** — Complete job history with retry support
 - **Stalled download retry** — Automatic detection and recovery (resume → restart), manual retry button
+- **Duplicate detection** — Checks history before re-downloading; reuses local files or re-downloads from CDN
 - **Notifications** — Email and Apprise notifications
 - **Scheduling** — Time-based pause/resume/speedlimit
 

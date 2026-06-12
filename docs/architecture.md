@@ -91,6 +91,41 @@ Each retry resets the 60-second stall timer. The `retry_stalled` API mode (`?mod
 4. Corrects the job's `torbox_type` if the download was found in a different type list than expected
 5. Returns `(status, is_cdn_available, progress, actual_type)` for retry decision-making
 
+### Duplicate Detection and Cache-Aware Re-Download
+
+When a download request is received, DebridNZBd checks the history table for a matching entry before submitting to Torbox. This avoids creating duplicate downloads and leverages cached content.
+
+**Configuration:** `switches.duplicate_detection` — `1` to enable, `0` to disable (default). When disabled, all requests proceed to Torbox without checking history.
+
+#### Detection Logic
+
+For **URL submissions** (`?mode=addurl`), the check happens *before* Torbox submission:
+1. Normalize the URL (lowercase scheme/host, sort query params, strip trailing `/`)
+2. Query `history` table for exact URL match (by type: usenet/torrent/webdl)
+3. If found → check local disk, then CDN availability
+
+For **file uploads** (`?mode=addfile` with `.torrent` files), the check happens *after* Torbox submission:
+1. Torbox returns the torrent info hash from the upload response
+2. Query `history` table for matching `torbox_hash` (case-insensitive)
+3. If found → check local disk, then CDN availability
+
+NZB file uploads skip duplicate detection (no reliable hash for dedup).
+
+#### Actions
+
+| Condition | Action | Job Created |
+|---|---|---|
+| File on local disk | `reuse_local` | Job with status `Complete`, `local_path` set |
+| Not on disk, cached on CDN | `redownload_cdn` | Job with status `Fetching`, CDN processor re-downloads |
+| Not on disk, not on CDN | `resubmit` | Normal Torbox submission proceeds |
+| Not in history | `new` | Normal Torbox submission proceeds |
+
+For `reuse_local` and `redownload_cdn` with file uploads, the duplicate Torbox download is deleted before creating the local job.
+
+#### URL Normalization
+
+`normalize_url()` lowercases the scheme and host, strips trailing slashes, and sorts query parameters. This ensures `?a=1&b=2` matches `?b=2&a=1`. URLs are stored in normalized form in the jobs table so that future duplicate checks match regardless of query parameter order or case differences.
+
 ### SABnzbd API Mode Dispatch
 
 The `api/router.py` handles all incoming `?mode=XXX` requests:
@@ -299,7 +334,7 @@ Maps SABnzbd queue slots to Torbox downloads. Key fields:
 
 ### `history` — Completed/failed jobs
 
-Archived jobs with final status, local file paths, timing data, and the original submission URL (`nzo_url`) for retry support.
+Archived jobs with final status, local file paths, timing data, and the original submission URL (`nzo_url`) for retry support. Also includes `torbox_hash` for file upload deduplication.
 
 ### `categories`, `sorters`, `schedules`, `warnings`
 
@@ -312,6 +347,8 @@ Support tables for category management, sorting rules, scheduled tasks, and warn
 | 001 | Initial schema: config, jobs, history, categories, sorters, schedules, warnings |
 | 002 | Add `nzo_url` column to jobs table (for retry support) |
 | 003 | Add `tags` column and `torbox_hash` index to jobs table (for qBittorrent API) |
+| 004 | Add `last_progress_change`, `stalled_since`, `stall_retries` columns to jobs table |
+| 005 | Add `torbox_hash` column and index to history table (for duplicate detection) |
 
 ## Torbox Client (`debridnzbd/torbox/`)
 
