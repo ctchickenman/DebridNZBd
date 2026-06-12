@@ -1367,6 +1367,13 @@ async def handle_queue(params: dict) -> JSONResponse:
     total_sizeleft = 0.0
     now = time.time()
 
+    # Resolve the complete directory to an absolute path for *arr clients.
+    # This is used as the fallback path when a job's local_path is empty
+    # (download not yet complete or CDN download failed).
+    complete_dir_resolved = str(Path(
+        await config.get("folders", "complete_dir", "downloads/complete")
+    ).resolve()) if config else ""
+
     for row in rows:
         nzo_id = row[0]
         filename = row[1]
@@ -1417,14 +1424,20 @@ async def handle_queue(params: dict) -> JSONResponse:
         # storage = the file's full local path (on disk), never a CDN URL.
         # path    = the parent directory of the file.
         # When local_path is empty (download not yet complete or CDN download
-        # failed), both fields are left empty so clients know the file isn't
-        # available on disk yet.
+        # failed), fall back to the resolved complete_dir so *arr clients
+        # always get an absolute path they can use for remote path mapping.
         # Safety net: strip any CDN URL that should not be exposed to clients.
         if local_path.startswith(("http://", "https://")):
             local_path = ""
-        storage = local_path
-        from pathlib import Path as _Path
-        path = str(_Path(local_path).parent) if local_path else ""
+        if local_path:
+            # Resolve to absolute path in case local_path is relative
+            if not Path(local_path).is_absolute():
+                local_path = str(Path(local_path).resolve())
+            storage = local_path
+            path = str(Path(local_path).parent)
+        else:
+            storage = complete_dir_resolved
+            path = complete_dir_resolved
 
         slots.append(QueueSlot(
             status=status,

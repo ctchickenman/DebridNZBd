@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from debridnzbd.core.cdn_downloader import download_file, move_to_category_dir
@@ -1022,10 +1023,14 @@ async def _move_to_history(db: object, nzo_id: str, now: float = 0) -> None:
         # storage and path must always be local disk paths — never CDN URLs.
         # Strip any http(s):// value as a safety net; these are internal Torbox
         # links that must not be exposed to *arr clients as output paths.
+        # Also resolve relative paths to absolute so *arr clients get
+        # consistent paths they can map remotely.
         local_path = row[12] or ""
         if local_path.startswith(("http://", "https://")):
             logger.warning("State sync: local_path for %s is a CDN URL — clearing it", nzo_id)
             local_path = ""
+        elif local_path and not Path(local_path).is_absolute():
+            local_path = str(Path(local_path).resolve())
         storage = local_path
 
         # Insert into history

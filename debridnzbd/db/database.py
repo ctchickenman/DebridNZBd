@@ -488,37 +488,53 @@ class Database:
         logger.info("Migration 005: Ensured idx_history_torbox_hash index exists")
 
     async def _migration_006(self) -> None:
-        """Clear CDN URLs from storage and path columns in history.
+        """Clean up output paths in history: clear CDN URLs and resolve relatives.
 
         Previous versions stored Torbox CDN links (https://...) in the
-        storage and path columns.  The SABnzbd API uses these fields as
-        the on-disk output path that *arr clients read to locate
-        downloaded files.  A CDN URL is never a valid local path, so
-        this migration replaces any http(s) URL in those columns with
-        an empty string, ensuring clients never see a CDN link where a
-        disk path belongs.
-        """
-        # Replace CDN URLs in storage with empty string
-        cursor = await self.conn.execute(
-            "UPDATE history SET storage = '' "
-            "WHERE storage LIKE 'http://%' OR storage LIKE 'https://%'"
-        )
-        await self.conn.commit()
-        if cursor.rowcount:
-            logger.info("Migration 006: Cleared %d CDN URLs from history.storage", cursor.rowcount)
-        else:
-            logger.info("Migration 006: No CDN URLs found in history.storage")
+        storage and path columns, and some paths were stored as relative
+        (e.g. "downloads/complete/file.mkv" instead of
+        "/data/downloads/complete/file.mkv").
 
-        # Replace CDN URLs in path with empty string
-        cursor = await self.conn.execute(
-            "UPDATE history SET path = '' "
-            "WHERE path LIKE 'http://%' OR path LIKE 'https://%'"
-        )
-        await self.conn.commit()
-        if cursor.rowcount:
-            logger.info("Migration 006: Cleared %d CDN URLs from history.path", cursor.rowcount)
+        *arr clients need absolute paths for remote path mapping. This
+        migration:
+        1. Clears CDN URLs (http://, https://) from storage and path.
+        2. Resolves relative paths to absolute using Path.resolve().
+        """
+        from pathlib import Path
+
+        # 1. Clear CDN URLs from storage and path
+        for col in ("storage", "path"):
+            cursor = await self.conn.execute(
+                f"UPDATE history SET {col} = '' "
+                f"WHERE {col} LIKE 'http://%' OR {col} LIKE 'https://%'"
+            )
+            await self.conn.commit()
+            if cursor.rowcount:
+                logger.info("Migration 006: Cleared %d CDN URLs from history.%s", cursor.rowcount, col)
+
+        # 2. Resolve relative paths to absolute
+        #    Read all non-empty storage/path values, resolve them, and
+        #    update the ones that changed.
+        resolved = 0
+        for col in ("storage", "path"):
+            cursor = await self.conn.execute(
+                f"SELECT rowid, {col} FROM history WHERE {col} != ''"
+            )
+            rows = await cursor.fetchall()
+            for rowid, val in rows:
+                p = Path(val)
+                if not p.is_absolute():
+                    abs_val = str(p.resolve())
+                    await self.conn.execute(
+                        f"UPDATE history SET {col} = ? WHERE rowid = ?",
+                        (abs_val, rowid),
+                    )
+                    resolved += 1
+            await self.conn.commit()
+        if resolved:
+            logger.info("Migration 006: Resolved %d relative paths to absolute", resolved)
         else:
-            logger.info("Migration 006: No CDN URLs found in history.path")
+            logger.info("Migration 006: All paths already absolute")
 
 
 # ------------------------------------------------------------------ #

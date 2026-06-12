@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 
 from fastapi.responses import JSONResponse
 
@@ -39,6 +40,7 @@ async def handle_history(params: dict) -> JSONResponse:
     """
     request = params.get("request")
     db = getattr(request.app.state, "db", None) if request else None
+    config = getattr(request.app.state, "config", None) if request else None
 
     if db is None or db.conn is None:
         return JSONResponse(
@@ -48,6 +50,15 @@ async def handle_history(params: dict) -> JSONResponse:
     start = int(params.get("start") or 0)
     limit = int(params.get("limit") or 0)
     failed_only = int(params.get("failed_only") or 0)
+
+    # Resolve complete_dir to an absolute path for *arr clients.
+    # When storage/path is empty (download not on disk), fall back to this
+    # so clients always get an absolute path for remote path mapping.
+    complete_dir_resolved = ""
+    if config:
+        complete_dir_resolved = str(Path(
+            await config.get("folders", "complete_dir", "downloads/complete")
+        ).resolve())
 
     # Build query with optional filters.
     # The SABnzbd API shows only usenet jobs — torrent and webdl jobs are
@@ -90,6 +101,18 @@ async def handle_history(params: dict) -> JSONResponse:
             storage = ""
         if path.startswith(("http://", "https://")):
             path = ""
+
+        # Resolve relative paths to absolute so *arr clients can apply
+        # remote path mappings. When storage/path are empty (download not
+        # on disk), fall back to the resolved complete directory.
+        if storage and not Path(storage).is_absolute():
+            storage = str(Path(storage).resolve())
+        elif not storage:
+            storage = complete_dir_resolved
+        if path and not Path(path).is_absolute():
+            path = str(Path(path).resolve())
+        elif not path:
+            path = complete_dir_resolved
         download_time = int(row[8] or 0)
         postproc_time = int(row[9] or 0)
         completed = int(row[11] or 0)

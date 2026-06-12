@@ -158,10 +158,15 @@ async def _build_status_response(params: dict) -> JSONResponse:
         pid=os.getpid(),
     )
 
-    # Folder config
+    # Folder config — resolve to absolute paths so *arr clients can
+    # apply remote path mappings. A relative value like "downloads/complete"
+    # becomes "/data/downloads/complete" in Docker.
     if config:
-        status_response.downloaddir = await config.get("folders", "download_dir", "downloads/incomplete")
-        status_response.completedir = await config.get("folders", "complete_dir", "downloads/complete")
+        from pathlib import Path
+        download_dir = await config.get("folders", "download_dir", "downloads/incomplete")
+        complete_dir = await config.get("folders", "complete_dir", "downloads/complete")
+        status_response.downloaddir = str(Path(download_dir).resolve())
+        status_response.completedir = str(Path(complete_dir).resolve())
 
     return JSONResponse(content={"status": True, **status_response.model_dump()})
 
