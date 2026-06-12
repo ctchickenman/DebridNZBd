@@ -821,11 +821,15 @@ class TorboxClient:
             for item in result.data:
                 if isinstance(item, dict):
                     downloads.append(TorboxUsenetDownload(**item))
-        elif isinstance(result.data, dict) and "data" in result.data:
-            # Some responses nest data further
-            for item in result.data["data"]:
-                if isinstance(item, dict):
-                    downloads.append(TorboxUsenetDownload(**item))
+        elif isinstance(result.data, dict):
+            if isinstance(result.data.get("data"), list):
+                # Some responses nest data further
+                for item in result.data["data"]:
+                    if isinstance(item, dict):
+                        downloads.append(TorboxUsenetDownload(**item))
+            else:
+                # Torbox returns a single object (not a list) when querying by ID
+                downloads.append(TorboxUsenetDownload(**result.data))
 
         return downloads
 
@@ -1050,6 +1054,9 @@ class TorboxClient:
             for item in result.data:
                 if isinstance(item, dict):
                     downloads.append(TorboxTorrentDownload(**item))
+        elif isinstance(result.data, dict):
+            # Torbox returns a single object (not a list) when querying by ID
+            downloads.append(TorboxTorrentDownload(**result.data))
         return downloads
 
     async def check_torrent_cached(
@@ -1230,6 +1237,9 @@ class TorboxClient:
             for item in result.data:
                 if isinstance(item, dict):
                     downloads.append(TorboxWebDownload(**item))
+        elif isinstance(result.data, dict):
+            # Torbox returns a single object (not a list) when querying by ID
+            downloads.append(TorboxWebDownload(**result.data))
         return downloads
 
     async def check_web_cached(

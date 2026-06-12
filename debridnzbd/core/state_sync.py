@@ -187,6 +187,18 @@ async def check_torbox_availability(
 
             if downloads:
                 dl = downloads[0]
+                # Verify the result ID matches the requested ID.
+                # When Torbox ignores the id filter on error paths, it may
+                # return the full unfiltered list — the first item won't be
+                # the download we're looking for.
+                result_id = getattr(dl, "id", None)
+                if result_id is not None and result_id != dl_id:
+                    logger.warning(
+                        "check_torbox_availability: %s query for id=%s returned "
+                        "download with id=%s (wrong ID, ignoring)",
+                        dtype, dl_id, result_id,
+                    )
+                    continue
                 status_lower = (dl.status or "").lower()
                 is_available = status_lower in COMPLETED_STATUSES
                 logger.warning(
