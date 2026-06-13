@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Current schema version — used to determine which migrations to run.
 # Increment this when adding new migrations.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 class Database:
@@ -548,6 +548,22 @@ class Database:
         )
         await self.conn.commit()
         logger.info("Migration 007: Ensured idx_jobs_nzo_url index exists")
+
+    async def _migration_008(self) -> None:
+        """Add indexes on jobs.filename and history.name for name-based duplicate detection.
+
+        Name-based matching (case-insensitive via LOWER()) is the primary
+        duplicate detection mechanism. These indexes speed up lookups on
+        the normalized name columns used by handle_duplicate_check().
+        """
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_filename ON jobs(filename)"
+        )
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_history_name ON history(name)"
+        )
+        await self.conn.commit()
+        logger.info("Migration 008: Ensured idx_jobs_filename and idx_history_name indexes exist")
 
 
 

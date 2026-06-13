@@ -38,10 +38,11 @@
       <div class="form-group">
         <label>Identical Download Detection</label>
         <select name="switches.duplicate_detection">
-          <option value="0" {% if switches.get('duplicate_detection', '0') == '0' %}selected{% endif %}>Off</option>
-          <option value="1" {% if switches.get('duplicate_detection') == '1' %}selected{% endif %}>Basic</option>
-          <option value="2" {% if switches.get('duplicate_detection') == '2' %}selected{% endif %}>Smart</option>
+          <option value="0" {% if switches.get('duplicate_detection', '1') == '0' %}selected{% endif %}>Off</option>
+          <option value="1" {% if switches.get('duplicate_detection', '1') == '1' %}selected{% endif %}>Basic</option>
+          <option value="2" {% if switches.get('duplicate_detection', '1') == '2' %}selected{% endif %}>Smart</option>
         </select>
+        <small class="form-text text-muted">Detects duplicate downloads by name, URL, and torrent hash. Basic and Smart both detect duplicates; Smart will be extended with PROPER release handling.</small>
       </div>
       <input type="hidden" name="switches.allow_proper" value="0">
       <div class="form-group">

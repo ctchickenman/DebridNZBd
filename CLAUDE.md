@@ -296,33 +296,31 @@ When a download request is received, DebridNZBd checks both the active `jobs` ta
 
 | Section | Key | Default | Description |
 |---|---|---|---|
-| `switches` | `duplicate_detection` | `0` | Enable duplicate detection (`1` = enabled, `0` = disabled) |
+| `switches` | `duplicate_detection` | `1` | Enable duplicate detection (`0` = off, `1` = basic, `2` = smart) |
 
-When disabled (default), all requests proceed to Torbox without checking for duplicates.
+Duplicate detection is enabled by default. Both basic and smart modes use the same matching logic (name, URL, and hash). Smart mode is reserved for future PROPER release handling.
 
 ### Detection Logic
 
-The check happens in two stages — **active jobs first, then history**:
+The check happens in two stages — **active jobs first, then history** — and within each stage, three matching methods are tried in order: **name → URL → hash**.
 
-1. **Active jobs check** (`jobs` table): If a download with the same URL or hash is currently in the queue (any status), return `duplicate_active` with the existing nzo_id. No new Torbox submission is created and the existing job ID is returned to the client. For `Complete` jobs with a file on disk, returns `reuse_local` instead.
+**Name matching** (primary): Case-insensitive comparison of the download name against `jobs.filename` and `history.name`. Names are normalized by stripping common archive extensions (`.nzb`, `.torrent`, `.nzb.gz`, `.par2`, `.rar`, `.zip`, `.7z`) and lowercasing. This catches duplicates regardless of source URL or upload method — the same content from different indexers or as a file upload will match by name.
 
-2. **History check** (`history` table): If no active match, search completed/failed downloads.
+**URL matching** (secondary): Exact match on the normalized URL in `jobs.nzo_url` and `history.nzo_url`. Only applies to URL submissions (`addurl`).
 
-For **URL submissions** (`?mode=addurl`), the check happens *before* Torbox submission:
-1. Normalize the URL (lowercase scheme/host, sort query params, strip trailing `/`)
-2. Query `jobs` table for exact URL match (by type: usenet/torrent/webdl)
-3. If found in jobs → return `duplicate_active` (or `reuse_local` if Complete with file on disk)
-4. If not in jobs → query `history` table for exact URL match
-5. If found in history → check local disk, then CDN availability
+**Hash matching** (tertiary): Exact match on `torbox_hash` in `jobs` and `history`. Only applies to `.torrent` file uploads.
 
-For **file uploads** (`?mode=addfile` with `.torrent` files), the check happens *after* Torbox submission:
-1. Torbox returns the torrent info hash from the upload response
-2. Query `jobs` table for matching `torbox_hash` (case-insensitive)
-3. If found in jobs → delete the duplicate from Torbox, return existing nzo_id
-4. If not in jobs → query `history` table for matching `torbox_hash`
-5. If found in history → check local disk, then CDN availability
+Failed history entries (`status = 'Failed'`) are excluded from matching, allowing users to retry failed downloads.
 
-NZB file uploads skip duplicate detection (no reliable hash for dedup).
+### Detection Order
+
+For each table (jobs, then history):
+
+1. **Name match**: `LOWER(filename) IN (normalized_name, normalized_name.nzb, normalized_name.torrent, ...)` — case-insensitive, extension-agnostic
+2. **URL match**: `nzo_url = normalized_url AND torbox_type = type` — exact normalized URL with type filter
+3. **Hash match**: `torbox_hash = lowercased_hash` — case-insensitive info hash
+
+The first match wins. If found in the active queue, returns `duplicate_active` (or `reuse_local` if Complete with file on disk). If found only in history, checks local disk and CDN availability.
 
 ### Actions
 
@@ -340,6 +338,10 @@ For `duplicate_active` with file uploads, the newly submitted duplicate is delet
 ### URL Normalization
 
 `normalize_url()` lowercases the scheme and host, strips trailing slashes, and sorts query parameters. This ensures `?a=1&b=2` matches `?b=2&a=1`.
+
+### Name Normalization
+
+`normalize_name()` lowercases the name and strips common archive extensions (`.nzb`, `.torrent`, `.nzb.gz`, `.par2`, `.rar`, `.zip`, `.7z`). This ensures `Movie.2024.Group.nzb` matches `Movie.2024.Group` and `movie.2024.group.torrent`.
 
 ### Speed Tracking
 

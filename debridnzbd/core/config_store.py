@@ -156,7 +156,7 @@ CONFIG_DEFAULTS: dict[str, dict[str, str]] = {
         "disconnect_on_empty": "0",
         "propagation_delay": "0",
         "queue_complete": "300",
-        "duplicate_detection": "0",
+        "duplicate_detection": "1",
         "smart_duplicate_detection": "0",
         "allow_proper": "0",
         "action_on_encrypted": "0",

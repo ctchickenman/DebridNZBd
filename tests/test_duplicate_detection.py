@@ -2,12 +2,16 @@
 
 Validates:
 - URL normalization for duplicate matching
+- Name normalization for duplicate matching
 - DuplicateCheckResult dataclass defaults
 - handle_duplicate_check logic for all action types
+- Name-based matching: primary detection mechanism
 - Jobs table check: duplicate_active for active downloads
+- History table check: reuse_local, redownload_cdn, resubmit
 - addurl duplicate detection: reuse_local, redownload_cdn, resubmit, new, duplicate_active
 - Config gating: duplicate_detection switch enables/disables the feature
-- Database migration: torbox_hash column added to history table
+- Config value "2" (Smart) enables detection
+- Database migration: torbox_hash column, nzo_url index, filename/name indexes
 """
 
 import pytest
@@ -22,6 +26,7 @@ from fastapi.testclient import TestClient
 from debridnzbd.api.queue import (
     DuplicateCheckResult,
     normalize_url,
+    normalize_name,
     handle_duplicate_check,
 )
 from debridnzbd.db.database import Database
@@ -72,6 +77,48 @@ class TestNormalizeUrl:
         url1 = normalize_url("http://example.com/path?b=2&a=1")
         url2 = normalize_url("http://example.com/path?a=1&b=2")
         assert url1 == url2
+
+
+class TestNormalizeName:
+    """Test name normalization for duplicate comparison."""
+
+    def test_lowercase(self) -> None:
+        assert normalize_name("Movie.2024.Group.nzb") == "movie.2024.group"
+
+    def test_strip_nzb_extension(self) -> None:
+        assert normalize_name("show.s01e02.nzb") == "show.s01e02"
+
+    def test_strip_torrent_extension(self) -> None:
+        assert normalize_name("movie.2024.torrent") == "movie.2024"
+
+    def test_strip_nzb_gz_extension(self) -> None:
+        assert normalize_name("show.s01e02.nzb.gz") == "show.s01e02"
+
+    def test_strip_rar_extension(self) -> None:
+        assert normalize_name("archive.part01.rar") == "archive.part01"
+
+    def test_strip_zip_extension(self) -> None:
+        assert normalize_name("package.zip") == "package"
+
+    def test_strip_7z_extension(self) -> None:
+        assert normalize_name("archive.7z") == "archive"
+
+    def test_strip_par2_extension(self) -> None:
+        assert normalize_name("file.par2") == "file"
+
+    def test_no_extension(self) -> None:
+        assert normalize_name("Movie.2024.Group") == "movie.2024.group"
+
+    def test_empty_name(self) -> None:
+        assert normalize_name("") == ""
+
+    def test_whitespace_stripped(self) -> None:
+        assert normalize_name("  Movie.2024.nzb  ") == "movie.2024"
+
+    def test_different_extensions_same_content(self) -> None:
+        """Different extensions should normalize to the same name."""
+        assert normalize_name("Show.S01E02.Group.nzb") == normalize_name("Show.S01E02.Group.torrent")
+        assert normalize_name("Show.S01E02.Group.nzb") == normalize_name("Show.S01E02.Group")
 
 
 class TestDuplicateCheckResult:
@@ -325,11 +372,11 @@ class TestHandleDuplicateCheck:
                 assert result.action == "resubmit"
 
     @pytest.mark.asyncio
-    async def test_url_in_history_no_torbox_id_returns_resubmit(
+    async def test_url_in_history_no_torbox_id_returns_new(
         self, dup_db: Database, dup_config: ConfigStore, tmp_path: Path
     ) -> None:
-        """When history entry has no torbox_id, should return 'resubmit'."""
-        # Insert a history entry with no torbox_id (NULL)
+        """Failed history entries are excluded from matching (allowing retry)."""
+        # Insert a history entry with no torbox_id and Failed status
         normalized_url = normalize_url("http://example.com/old_file.nzb")
         await dup_db.conn.execute(
             """INSERT INTO history
@@ -352,10 +399,12 @@ class TestHandleDuplicateCheck:
         )
         await dup_db.conn.commit()
 
+        # Failed entries are excluded from matching, so this should return 'new'
+        # (allowing the user to retry the download)
         result = await handle_duplicate_check(
             dup_db, dup_config, "http://example.com/old_file.nzb", "usenet"
         )
-        assert result.action == "resubmit"
+        assert result.action == "new"
 
     @pytest.mark.asyncio
     async def test_hash_in_history_file_on_disk_returns_reuse_local(
@@ -811,6 +860,267 @@ class TestHandleDuplicateCheck:
         assert result.action == "reuse_local"
         assert result.local_path == str(test_file)
 
+    @pytest.mark.asyncio
+    async def test_name_match_in_jobs_returns_duplicate_active(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """When the download name matches an active job, should return duplicate_active."""
+        now = time.time()
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_name01",
+                "Movie.2024.Group.nzb",  # Name with extension
+                "",
+                "http://different-indexer.com/movie.nzb",  # Different URL
+                "*",
+                "Default",
+                0,
+                -1,
+                "Downloading",
+                1073741824.0,
+                536870912.0,
+                50.0,
+                now,
+                "99999",
+                "usenet",
+                "",
+                0,
+                "downloading",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Submit with a different URL but same name — should match by name
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="http://other-indexer.com/movie.nzb",
+            url_type="usenet", name="Movie.2024.Group",
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_name01"
+
+    @pytest.mark.asyncio
+    async def test_name_match_in_history_returns_reuse_local(
+        self, dup_db: Database, dup_config: ConfigStore, tmp_path: Path
+    ) -> None:
+        """When the download name matches a history entry with file on disk, should return reuse_local."""
+        # Create a file on disk
+        complete_dir = tmp_path / "downloads" / "complete"
+        complete_dir.mkdir(parents=True, exist_ok=True)
+        test_file = complete_dir / "Show.S01E02.Group.mkv"
+        test_file.write_bytes(b"show data")
+
+        await dup_db.conn.execute(
+            """INSERT INTO history
+            (nzo_id, name, status, size, category, completed, time_added, torbox_id, torbox_type, nzo_url, path, torbox_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_hist_name",
+                "Show.S01E02.Group.nzb",  # Name with .nzb extension
+                "Completed",
+                2048.0,
+                "tv",
+                1700000000.0,
+                1699999000.0,
+                "44444",
+                "usenet",
+                "http://original-indexer.com/show.nzb",  # Different URL
+                str(test_file),
+                "",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Search with different URL but same name (extension stripped)
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="http://other-indexer.com/show.nzb",
+            url_type="usenet", name="Show.S01E02.Group.nzb",
+        )
+        assert result.action == "reuse_local"
+        assert result.local_path == str(test_file)
+
+    @pytest.mark.asyncio
+    async def test_name_match_case_insensitive(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """Name matching should be case-insensitive."""
+        now = time.time()
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_case",
+                "MOVIE.2024.GROUP.NZB",  # Uppercase
+                "",
+                "http://example.com/movie.nzb",
+                "*",
+                "Default",
+                0,
+                -1,
+                "Queued",
+                0,
+                0,
+                0,
+                now,
+                "77777",
+                "usenet",
+                "",
+                0,
+                "queued",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Search with lowercase name — should still match
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="http://different.com/movie.nzb",
+            url_type="usenet", name="movie.2024.group.nzb",
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_case"
+
+    @pytest.mark.asyncio
+    async def test_name_match_priority_over_url(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """Name match should be checked before URL match."""
+        now = time.time()
+        # Insert a job with a specific name but different URL
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_namepri",
+                "Show.S03E12.Group.nzb",
+                "",
+                "http://old-indexer.com/show.nzb",  # Different URL
+                "*",
+                "Default",
+                0,
+                -1,
+                "Queued",
+                0,
+                0,
+                0,
+                now,
+                "66666",
+                "usenet",
+                "",
+                0,
+                "queued",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Search with same name but different URL — name match should hit first
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="http://new-indexer.com/show.nzb",
+            url_type="usenet", name="Show.S03E12.Group.nzb",
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_namepri"
+
+    @pytest.mark.asyncio
+    async def test_config_value_2_enables_detection(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """Config value '2' (Smart) should enable duplicate detection."""
+        await dup_config.set("switches", "duplicate_detection", "2")
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="http://example.com/test.nzb",
+            url_type="usenet", name="Test.Download",
+        )
+        # Should not return "new" just because detection is off —
+        # "2" should enable detection just like "1"
+        # (There's no match, so it returns "new" which means detection ran)
+        assert result.action == "new"
+
+    @pytest.mark.asyncio
+    async def test_name_match_with_no_url(
+        self, dup_db: Database, dup_config: ConfigStore
+    ) -> None:
+        """Name-based matching should work even without a URL (file uploads)."""
+        now = time.time()
+        await dup_db.conn.execute(
+            """INSERT INTO jobs (
+                nzo_id, filename, password, nzo_url, category, script, priority, pp,
+                status, size, sizeleft, percentage, time_added,
+                torbox_id, torbox_type, torbox_hash, position, torbox_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_nourl",
+                "Upload.File.nzb",
+                "",
+                "",  # No URL (file upload)
+                "*",
+                "Default",
+                0,
+                -1,
+                "Queued",
+                0,
+                0,
+                0,
+                now,
+                "55555",
+                "usenet",
+                "",
+                0,
+                "queued",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Search with no URL but matching name
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="", url_type="usenet",
+            torbox_hash="", name="Upload.File.nzb",
+        )
+        assert result.action == "duplicate_active"
+        assert result.nzo_id == "SABnzbd_nzo_nourl"
+
+    @pytest.mark.asyncio
+    async def test_failed_history_excluded_from_name_match(
+        self, dup_db: Database, dup_config: ConfigStore, tmp_path: Path
+    ) -> None:
+        """Failed history entries should be excluded from name matching (allows retry)."""
+        await dup_db.conn.execute(
+            """INSERT INTO history
+            (nzo_id, name, status, size, category, completed, time_added, torbox_id, torbox_type, nzo_url, path, torbox_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "SABnzbd_nzo_failed",
+                "Failed.Show.S01E01.Group.nzb",
+                "Failed",  # Failed status
+                0,
+                "*",
+                1700000000.0,
+                1699999000.0,
+                None,
+                "usenet",
+                "http://example.com/failed.nzb",
+                "",
+                "",
+            ),
+        )
+        await dup_db.conn.commit()
+
+        # Search with matching name — should NOT match failed entry
+        result = await handle_duplicate_check(
+            dup_db, dup_config, url="http://example.com/failed.nzb",
+            url_type="usenet", name="Failed.Show.S01E01.Group.nzb",
+        )
+        assert result.action == "new"
+
 
 # ------------------------------------------------------------------ #
 #  Integration tests for addurl duplicate detection                   #
@@ -1107,5 +1417,43 @@ class TestJobsNzoUrlIndexMigration:
         )
         row = await cursor.fetchone()
         assert row is not None, "idx_jobs_nzo_url index not found"
+
+        await database.close()
+
+
+class TestNameIndexMigration:
+    """Test that the filename/name indexes are created by migration 008."""
+
+    @pytest.mark.asyncio
+    async def test_jobs_filename_index_exists(self, tmp_path: Path) -> None:
+        """After migration, there should be an index on jobs.filename."""
+        db_path = tmp_path / "admin" / "test.db"
+        database = Database(db_path)
+        await database.initialize()
+        config = ConfigStore(database)
+        await config.seed_defaults()
+
+        cursor = await database.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_jobs_filename'"
+        )
+        row = await cursor.fetchone()
+        assert row is not None, "idx_jobs_filename index not found"
+
+        await database.close()
+
+    @pytest.mark.asyncio
+    async def test_history_name_index_exists(self, tmp_path: Path) -> None:
+        """After migration, there should be an index on history.name."""
+        db_path = tmp_path / "admin" / "test.db"
+        database = Database(db_path)
+        await database.initialize()
+        config = ConfigStore(database)
+        await config.seed_defaults()
+
+        cursor = await database.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_history_name'"
+        )
+        row = await cursor.fetchone()
+        assert row is not None, "idx_history_name index not found"
 
         await database.close()
