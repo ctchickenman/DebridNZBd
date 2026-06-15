@@ -42,7 +42,10 @@ via `fetch()` as AJAX, and on success reloads the page to show the new queue
 entry. On error, it displays the error message inline.
 
 Progress is shown through the web UI, which auto-refreshes the queue table
-every 10 seconds by replacing the `#queue-refresh` div content.
+every 5 seconds via HTMX. The `#queue-refresh` div uses `hx-get="/queue/partial"`
+and `hx-trigger="every 5s"` to poll a lightweight partial endpoint that returns
+only the queue content (summary cards, queue table, completed section) without
+the full page layout.
 
 ### File Upload (Web UI and API)
 
@@ -420,9 +423,13 @@ When a download reaches `error` or `failed` status:
 
 ### Web UI
 
-The home page (`/`) auto-refreshes the queue every 10 seconds via
-JavaScript. It fetches the current page with `X-Requested-With: XMLHttpRequest`
-and replaces the `#queue-refresh` div content.
+The home page (`/`) auto-refreshes the queue every 5 seconds using HTMX.
+The `#queue-refresh` div has `hx-get="/queue/partial"` and `hx-trigger="every 5s"`
+attributes, which poll a lightweight partial endpoint (`/queue/partial`) that
+returns only the queue content without the full page layout. The "Show Completed"
+toggle sends a `queueRefresh` custom event via `htmx.trigger()` and includes
+the checkbox state via `hx-include`, so the completed section visibility is
+preserved across refreshes without a full page reload.
 
 The queue table shows each job with columns: File, Status, Torbox, Category,
 Priority, Progress, Size, Speed, Time Left, and action buttons (Pause/Resume,

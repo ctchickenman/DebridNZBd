@@ -49,9 +49,11 @@ debridnzbd/
     database.py        # SQLite connection management, migrations
     models.py          # Pydantic models for local tables
   web/
-    routes.py          # Web UI page routes
+    routes.py          # Web UI page routes + HTMX partial route (/queue/partial)
     auth.py            # Web UI session auth (login/logout/cookies)
     templates/          # Jinja2 HTML templates
+      index.html         # Home page (full layout, includes index_partial.html)
+      index_partial.html # Queue content fragment for HTMX auto-refresh
     static/             # CSS, JS, images
   utils/
     nzo_id.py          # SABnzbd-compatible nzo_id generation

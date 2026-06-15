@@ -14,173 +14,13 @@
 </div>
 {% endif %}
 
-<div id="queue-refresh">
-<!-- Summary Bar -->
-<div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
-  <div class="card" style="flex:1; min-width:150px;">
-    <div class="card-body" style="text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:var(--primary);">{{ queue_count }}</div>
-      <div style="color:var(--text-muted); font-size:12px;">Queue</div>
-    </div>
-  </div>
-  <div class="card" style="flex:1; min-width:150px;">
-    <div class="card-body" style="text-align:center;">
-      <div style="font-size:24px; font-weight:700; color:var(--success);">{{ speed }}</div>
-      <div style="color:var(--text-muted); font-size:12px;">Speed</div>
-    </div>
-  </div>
-  <div class="card" style="flex:1; min-width:150px;">
-    <div class="card-body" style="text-align:center;">
-      <div style="font-size:24px; font-weight:700;">{{ size_remaining }}</div>
-      <div style="color:var(--text-muted); font-size:12px;">Remaining</div>
-    </div>
-  </div>
-  <div class="card" style="flex:1; min-width:150px;">
-    <div class="card-body" style="text-align:center;">
-      <div style="font-size:24px; font-weight:700;">{{ time_left }}</div>
-      <div style="color:var(--text-muted); font-size:12px;">Time Left</div>
-    </div>
-  </div>
+<div id="queue-refresh"
+     hx-get="/queue/partial"
+     hx-trigger="every 5s, queueRefresh from:body"
+     hx-swap="innerHTML"
+     hx-include="#show-completed-toggle">
+  {% include "index_partial.html" %}
 </div>
-
-<!-- Queue Table -->
-<div class="card">
-  <div class="card-header">
-    <span>Download Queue</span>
-    <label class="toggle-switch" style="margin-left:auto; display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-muted);">
-      <input type="checkbox" id="show-completed-toggle" {% if show_completed %}checked{% endif %} onchange="toggleCompleted()">
-      <span class="toggle-slider"></span>
-      Show Completed
-    </label>
-  </div>
-  {% if queue_items %}
-  <table class="queue-table">
-    <thead>
-      <tr>
-        <th>File</th>
-        <th>Status</th>
-        <th>Torbox</th>
-        <th>Category</th>
-        <th>Priority</th>
-        <th>Progress</th>
-        <th>Size</th>
-        <th>Speed</th>
-        <th>Time Left</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for item in queue_items %}
-      <tr{% if item.stalled %} class="stalled-row"{% endif %}>
-        <td><strong>{{ item.filename }}</strong></td>
-        <td>
-          <span class="badge badge-{{ item.status_label }}">{{ item.status }}</span>
-        </td>
-        <td style="font-size:12px; color:var(--text-muted);">{{ item.torbox_state if item.torbox_state else '—' }}</td>
-        <td><span class="badge badge-{{ item.status_label }}">{{ item.cat }}</span></td>
-        <td>{{ item.priority_label }}</td>
-        <td>
-          <div class="progress-bar"><div class="fill{% if item.percentage == '100' %} complete{% endif %}" style="width:{{ item.percentage }}%"></div></div>
-          {{ item.percentage }}%
-        </td>
-        <td>{{ item.size }}</td>
-        <td>{% if item.stalled %}<span class="stalled-indicator">Stalled {{ item.stall_duration }}</span>{% else %}{{ item.speed }}{% endif %}</td>
-        <td>{{ item.timeleft }}</td>
-        <td class="actions">
-          {% if item.stalled %}
-          <button class="btn btn-sm btn-info" title="Retry stalled download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
-          {% elif item.status == 'Fetching' %}
-          <button class="btn btn-sm btn-info" title="Retry CDN download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'CDN download retry initiated'})">↻</button>
-          {% elif item.status not in ('Complete', 'Failed') %}
-          <button class="btn btn-sm btn-outline" title="Retry download" onclick="apiAction('retry_stalled', {nzo_id: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Retry initiated'})">↻</button>
-          {% endif %}
-          {% if item.status == 'Paused' %}
-          <button class="btn btn-sm btn-success" title="Resume" onclick="apiAction('resume', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Resumed'})">▶</button>
-          {% else %}
-          <button class="btn btn-sm btn-warning" title="Pause" onclick="apiAction('pause', {nzo_ids: '{{ item.nzo_id }}'}, function() { window.location.reload(); }, {successMsg: 'Paused'})">⏸</button>
-          {% endif %}
-          <button class="btn btn-sm btn-danger" title="Delete" onclick="apiAction('delete', {nzo_ids: '{{ item.nzo_id }}'}, function() { removeRow(this.closest('tr')); }, {confirm: 'Delete this download?', successMsg: 'Download deleted', errorMsg: 'Delete failed'})">✕</button>
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="card-body" style="text-align:center; color:var(--text-muted); padding:40px;">
-    No downloads in queue. Add a NZB URL or magnet link below to get started.
-  </div>
-  {% endif %}
-</div>
-
-<!-- Completed/Failed History Section -->
-<div id="completed-section" style="display: {% if show_completed %}block{% else %}none{% endif %}; margin-top:16px;">
-  <div class="card">
-    <div class="card-header">
-      <span>Completed &amp; Failed</span>
-    </div>
-    {% if completed_items %}
-    <table class="queue-table">
-      <thead>
-        <tr>
-          <th style="width:30px;"></th>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Category</th>
-          <th>Size</th>
-          <th>Download Time</th>
-          <th>Completed</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for item in completed_items %}
-        <tr class="completed-row" data-nzo-id="{{ item.nzo_id }}" onclick="toggleCompletedRow(this)" style="cursor:pointer;">
-          <td class="completed-expand-icon">▸</td>
-          <td><strong>{{ item.name }}</strong></td>
-          <td><span class="badge badge-{{ item.status_label }}">{{ item.status }}</span></td>
-          <td>{{ item.category }}</td>
-          <td>{{ item.size }}</td>
-          <td>{{ item.download_time }}</td>
-          <td style="font-size:12px; color:var(--text-muted);">{{ item.completed }}</td>
-        </tr>
-        <tr class="completed-detail-row" style="display:none;">
-          <td></td>
-          <td colspan="6">
-            <div class="completed-detail">
-              {% if item.path %}
-              <div class="detail-field">
-                <span class="detail-label">Local File:</span>
-                <span class="detail-value" style="word-break:break-all;">{{ item.path }}</span>
-              </div>
-              {% endif %}
-              {% if item.storage %}
-              <div class="detail-field">
-                <span class="detail-label">Output:</span>
-                <span class="detail-value" style="word-break:break-all;">{{ item.storage }}</span>
-              </div>
-              {% endif %}
-              {% if item.fail_message %}
-              <div class="detail-field">
-                <span class="detail-label">Error:</span>
-                <span class="detail-value" style="color:var(--danger);">{{ item.fail_message }}</span>
-              </div>
-              {% endif %}
-              {% if not item.path and not item.storage and not item.fail_message %}
-              <div class="detail-field" style="color:var(--text-muted);">No output path recorded</div>
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <div class="card-body" style="text-align:center; color:var(--text-muted); padding:40px;">
-      No completed or failed downloads yet.
-    </div>
-    {% endif %}
-  </div>
-</div>
-</div><!-- end #queue-refresh -->
 
 <!-- Add NZB Section -->
 <div class="card">
@@ -291,7 +131,8 @@
     } else {
       url.searchParams.delete('show_completed');
     }
-    window.location.href = url.toString();
+    history.replaceState(null, '', url.toString());
+    htmx.trigger(document.body, 'queueRefresh');
   };
 
   // --- Toggle completed row detail ---
@@ -404,43 +245,6 @@
     });
   }
 
-  // --- Queue auto-refresh ---
-  var REFRESH_INTERVAL = 10000; // 10 seconds
-  var refreshTimer = null;
-  var addUrlInput = document.getElementById('add-url-input');
-
-  function refreshQueue() {
-    // Don't refresh if the page is hidden or the URL input is focused
-    if (document.hidden) return;
-    if (document.activeElement === addUrlInput) return;
-
-    // Preserve show_completed state during refresh
-    var showCompleted = document.getElementById('show-completed-toggle');
-    var url = window.location.pathname;
-    if (showCompleted && showCompleted.checked) {
-      url += '?show_completed=1';
-    }
-
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(function(resp) { return resp.text(); })
-      .then(function(html) {
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(html, 'text/html');
-        var newQueue = doc.getElementById('queue-refresh');
-        var oldQueue = document.getElementById('queue-refresh');
-        if (newQueue && oldQueue) {
-          oldQueue.innerHTML = newQueue.innerHTML;
-        }
-      })
-      .catch(function() {
-        // Silently ignore refresh errors
-      });
-  }
-
-  // Only auto-refresh on the home page
-  if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
-    refreshTimer = setInterval(refreshQueue, REFRESH_INTERVAL);
-  }
 })();
 </script>
 {% endblock %}

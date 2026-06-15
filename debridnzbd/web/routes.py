@@ -386,47 +386,29 @@ async def setup_submit(request: Request) -> Response:
 #  Home page                                                          #
 # ------------------------------------------------------------------ #
 
-@router.get("/", response_class=HTMLResponse)
-async def index(request: Request) -> HTMLResponse:
-    """Home page — download queue with summary stats and add-NZB form.
+async def _build_queue_data(db, show_completed: bool) -> dict:
+    """Build queue context data shared by index and partial routes.
 
-    When the ``show_completed`` query parameter is present, also includes
-    completed and failed items from the history table.
+    Queries the jobs (and optionally history) tables and returns a dict
+    with all variables needed by the queue partial template.
     """
-    config = getattr(request.app.state, "config", None)
-    db = getattr(request.app.state, "db", None)
-
-    api_key = ""
-    torbox_connected = False
     queue_items = []
     completed_items = []
-    categories = []
-    show_completed = bool(request.query_params.get("show_completed"))
-
-    if config is not None:
-        try:
-            api_key = await config.get("misc", "api_key")
-        except Exception:
-            pass
-        torbox_api_key = await config.get("torbox", "api_key")
-        torbox_connected = bool(torbox_api_key)
+    total_speed = 0
+    total_sizeleft = 0
 
     if db and db.conn:
-        # Read queue items with torbox_state and stall tracking
         cursor = await db.conn.execute(
             "SELECT nzo_id, filename, status, category, priority, percentage, "
             "size, sizeleft, speed, download_time, torbox_state, stalled_since "
             "FROM jobs ORDER BY position"
         )
         rows = await cursor.fetchall()
-        total_speed = 0
-        total_sizeleft = 0
         now = time.time()
         for row in rows:
             status = row[2] or "Queued"
             stalled_since = row[11] or 0
             stalled = stalled_since > 0
-            # If stalled, override display status
             display_status = "Stalled" if stalled else status
             status_label = (
                 "stalled" if stalled else
@@ -442,7 +424,6 @@ async def index(request: Request) -> HTMLResponse:
             item_sizeleft = row[7] or 0
             total_speed += item_speed
             total_sizeleft += item_sizeleft
-            # Compute stall duration string
             if stalled and stalled_since > 0:
                 elapsed = now - stalled_since
                 minutes = int(elapsed) // 60
@@ -463,7 +444,6 @@ async def index(request: Request) -> HTMLResponse:
                 "stall_duration": stall_duration,
             })
 
-        # Read completed/failed items from history when toggled on
         if show_completed:
             cursor = await db.conn.execute(
                 "SELECT nzo_id, name, status, size, category, download_time, "
@@ -490,21 +470,67 @@ async def index(request: Request) -> HTMLResponse:
                     "fail_message": row[8] or "",
                 })
 
-        # Read categories for the add form
-        cursor = await db.conn.execute("SELECT name FROM categories ORDER BY order_index")
-        categories = [r[0] for r in await cursor.fetchall()]
-
-    # Calculate stats from queue items
     size_remaining = _format_size(total_sizeleft) if total_sizeleft else "0 B"
     speed_str = _format_size(total_speed) + "/s" if total_speed else "0 B/s"
 
+    return {
+        "queue_count": len(queue_items),
+        "queue_items": queue_items,
+        "completed_items": completed_items,
+        "show_completed": show_completed,
+        "speed": speed_str,
+        "size_remaining": size_remaining,
+        "time_left": "0:00:00",
+    }
+
+
+@router.get("/queue/partial", response_class=HTMLResponse)
+async def queue_partial(request: Request) -> HTMLResponse:
+    """Partial queue content for HTMX auto-refresh.
+
+    Renders just the inner content of #queue-refresh (summary bar,
+    queue table, completed section) without the base layout.
+    Accepts ``show_completed`` query parameter to toggle the
+    completed/failed history section.
+    """
+    db = getattr(request.app.state, "db", None)
+    show_completed = bool(request.query_params.get("show_completed"))
+    queue_data = await _build_queue_data(db, show_completed)
+    return templates.TemplateResponse(request, "index_partial.html", queue_data)
+
+
+@router.get("/", response_class=HTMLResponse)
+async def index(request: Request) -> HTMLResponse:
+    """Home page — download queue with summary stats and add-NZB form.
+
+    When the ``show_completed`` query parameter is present, also includes
+    completed and failed items from the history table.
+    """
+    config = getattr(request.app.state, "config", None)
+    db = getattr(request.app.state, "db", None)
+
+    api_key = ""
+    torbox_connected = False
+    categories = []
+    show_completed = bool(request.query_params.get("show_completed"))
+
+    if config is not None:
+        try:
+            api_key = await config.get("misc", "api_key")
+        except Exception:
+            pass
+        torbox_api_key = await config.get("torbox", "api_key")
+        torbox_connected = bool(torbox_api_key)
+
+    if db and db.conn:
+        cursor = await db.conn.execute("SELECT name FROM categories ORDER BY order_index")
+        categories = [r[0] for r in await cursor.fetchall()]
+
+    queue_data = await _build_queue_data(db, show_completed)
+
     ctx = await _base_context(request, page="home",
         api_key=api_key, torbox_connected=torbox_connected,
-        queue_count=len(queue_items), queue_items=queue_items,
-        completed_items=completed_items, show_completed=show_completed,
-        queue_paused=False, speed=speed_str,
-        size_remaining=size_remaining, time_left="0:00:00",
-        categories=categories)
+        queue_paused=False, categories=categories, **queue_data)
     return templates.TemplateResponse(request, "index.html", ctx)
 
 
