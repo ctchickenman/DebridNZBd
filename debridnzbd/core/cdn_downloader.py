@@ -263,6 +263,13 @@ async def _do_download(url: str, dest_dir: str, filename: str | None) -> str | N
                     await asyncio.to_thread(shutil.copy2, str(temp_path), str(final_path))
                     await asyncio.to_thread(temp_path.unlink, missing_ok=True)
 
+                # Set world-readable permissions so *arr clients and other
+                # services can access the downloaded file regardless of umask.
+                try:
+                    await asyncio.to_thread(os.chmod, final_path, 0o666)
+                except OSError:
+                    logger.debug("CDN download: could not chmod %s", final_path)
+
                 logger.info(
                     "CDN download: completed %s (%s)",
                     final_path.name, _format_size(bytes_written),
@@ -383,6 +390,13 @@ async def _do_download_sync(url: str, dest_dir: str, filename: str | None) -> st
                     shutil.copy2(str(temp_path), str(final_path))
                     temp_path.unlink(missing_ok=True)
 
+                # Set world-readable permissions so *arr clients and other
+                # services can access the downloaded file regardless of umask.
+                try:
+                    os.chmod(final_path, 0o666)
+                except OSError:
+                    logger.debug("CDN download: could not chmod %s", final_path)
+
                 logger.info(
                     "CDN download: completed %s (%s)",
                     final_path.name, _format_size(bytes_written),
@@ -483,7 +497,8 @@ async def move_to_category_dir(
     final_path = final_dir / source.name
 
     # If the file already exists at the destination, remove the source and
-    # return the existing path.
+    # return the existing path. Also ensure the existing file has
+    # world-readable permissions.
     if final_path.exists():
         logger.info(
             "CDN download: file already exists at %s, removing source %s",
@@ -493,6 +508,10 @@ async def move_to_category_dir(
             await asyncio.to_thread(source.unlink, missing_ok=True)
         except OSError:
             logger.warning("CDN download: failed to remove source file %s", source)
+        try:
+            await asyncio.to_thread(os.chmod, final_path, 0o666)
+        except OSError:
+            logger.debug("CDN download: could not chmod %s", final_path)
         return str(final_path)
 
     # Move the file (handles cross-filesystem moves)
@@ -500,6 +519,16 @@ async def move_to_category_dir(
         await asyncio.to_thread(shutil.move, str(source), str(final_path))
     except Exception:
         logger.exception("CDN download: failed to move %s to %s", source, final_path)
+        return None
+
+    # Ensure world-readable permissions after the move (shutil.move
+    # preserves source permissions, which may be restrictive if umask
+    # was applied). This ensures *arr clients and other services can
+    # always read/write the file.
+    try:
+        await asyncio.to_thread(os.chmod, final_path, 0o666)
+    except OSError:
+        logger.debug("CDN download: could not chmod %s", final_path)
         return None
 
     logger.info("CDN download: moved %s → %s", source.name, final_path)
