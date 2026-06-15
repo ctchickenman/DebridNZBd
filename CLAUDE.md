@@ -99,6 +99,28 @@ with `Torbox` configuration for the debrid service.
 - **Config:** `get_config`, `set_config`, `del_config`, `get_cats`, `get_scripts`, `speedlimit`
 - **Other:** `version`, `auth`
 
+### Sub-Command Routing
+
+SABnzbd uses the `name` parameter as a sub-command within `mode=queue` and `mode=history`. DebridNZBd routes these sub-commands to the appropriate handler:
+
+- `?mode=queue&name=delete&value=NZO_ID&del_files=1` → delegates to `handle_delete`
+- `?mode=history&name=delete&value=NZO_ID&del_files=1` → delegates to `handle_delete`
+
+The `value` parameter is mapped to `nzo_ids` for compatibility with the direct `?mode=delete` endpoint. This ensures *arr clients that use the sub-command pattern (Sonarr, Radarr) have their delete requests handled correctly.
+
+### `delete` Mode
+
+Removes jobs from the queue or history. Accepts `nzo_ids` (comma-separated) and an optional `del_files` parameter:
+
+- **`del_files=1`**: Also removes the downloaded file from disk via `Path.unlink()`. The parent directory is **not** deleted — this matches SABnzbd behavior where *arr clients clean up files after importing but expect the directory to remain.
+- **`del_files=0`** (default): Only removes the database entry. The local file stays on disk.
+
+Active (non-Complete/Failed) downloads are also canceled on Torbox. Completed downloads are kept on Torbox so the user retains access to their files.
+
+### `purge` Mode
+
+Removes completed/failed jobs from the queue and entries from history. Also accepts `del_files=1` with the same file-deletion behavior as `delete`.
+
 ### `addfile` Mode
 
 The `addfile` mode accepts multipart form uploads of `.torrent` and `.nzb` files
@@ -289,6 +311,17 @@ Safety nets at multiple layers ensure CDN URLs never leak:
 3. **`_move_to_history()`**: Strips CDN URLs from `local_path` before writing to `storage` and `path`, and updates existing history entries with final data.
 4. **API responses**: All endpoints strip CDN URLs from path fields before returning them, and resolve relative paths to absolute.
 5. **Web UI**: Templates display `storage` as "Output" (not "CDN Link").
+
+### File Permissions
+
+Downloaded files are set to `0o666` (world read/write) after each successful download. This ensures *arr clients and other services can access the file regardless of the process umask. The chmod is applied at every point where a file reaches its final resting place:
+
+1. After atomic rename from temp file (async and sync download paths)
+2. After cross-filesystem copy fallback
+3. After `shutil.move()` to the category directory
+4. When the file already exists at the destination (dedup path)
+
+If `chmod` fails (e.g., on restricted filesystems like NFS or SMB/CIFS), the error is logged at debug level and the download proceeds normally.
 
 ## Duplicate Detection and Cache-Aware Re-Download
 

@@ -67,6 +67,17 @@ gateway that works with existing client applications without modification.
    - Enqueues the job to the CDN download worker pool (`run_cdn_processor`)
 9. `core/cdn_downloader.py` streams the CDN file to local disk
 10. On success: marks job as `Complete`, inserts into `history` table immediately (for *arr visibility), and keeps it in the `jobs` table during the grace period
+
+#### File Permissions
+
+Downloaded files are set to `0o666` (world read/write) after each successful CDN download or file move. This ensures *arr clients and other services can access the file regardless of the process umask. The chmod is applied at every point where a file reaches its final resting place:
+
+1. After atomic rename from temp file (async and sync download paths)
+2. After cross-filesystem copy fallback
+3. After `shutil.move()` to the category directory
+4. When the file already exists at the destination (dedup path)
+
+If `chmod` fails (e.g., on restricted filesystems like NFS or SMB/CIFS), the error is logged at debug level and the download proceeds normally.
 11. **Orphaned jobs** (deleted on Torbox side) are reconciled by matching URL, magnet hash, filename, or type
 
 **Note on Torbox API response format:** When querying by specific ID (e.g., `get_torrent_list(torrent_id=123)`), the Torbox API returns `data` as a single object dict instead of a list. All `get_*_list` methods handle both formats transparently.
@@ -183,6 +194,26 @@ The `api/router.py` handles all incoming `?mode=XXX` requests:
 | `del_config` | `api/config.py` | Yes (API key only) |
 | `get_cats` | `api/config.py` | Yes (API or NZB key) |
 | `get_scripts` | `api/config.py` | Yes (API key only) |
+
+#### Sub-Command Routing
+
+SABnzbd uses the `name` parameter as a sub-command within `mode=queue` and `mode=history`. DebridNZBd routes these sub-commands to the appropriate handler:
+
+| Request | Routed To | Description |
+|---------|-----------|-------------|
+| `?mode=queue&name=delete&value=NZO_ID` | `handle_delete` | Delete queue item(s) |
+| `?mode=history&name=delete&value=NZO_ID` | `handle_delete` | Delete history item(s) |
+
+The `value` parameter is mapped to `nzo_ids` for compatibility with the direct `?mode=delete` endpoint. This ensures *arr clients that use the sub-command pattern (Sonarr, Radarr) have their delete requests handled correctly.
+
+#### Delete and Purge Parameters
+
+The `delete` and `purge` modes accept a `del_files` parameter:
+
+- **`del_files=1`**: Remove the downloaded file from disk via `Path.unlink()`. The parent directory is **not** deleted — this matches SABnzbd behavior where *arr clients clean up files after importing but expect the directory to remain.
+- **`del_files=0`** (default): Only remove the database entry. The local file stays on disk.
+
+Active (non-Complete/Failed) downloads are also canceled on Torbox when deleted. Completed downloads are kept on Torbox so the user retains access to their files.
 
 ### qBittorrent API Endpoints
 

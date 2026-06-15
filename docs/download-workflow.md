@@ -391,7 +391,11 @@ When a download reaches `completed` or `cached` status:
    file to local disk using async httpx with a concurrency semaphore
    (default 2 simultaneous downloads). Files are written to a temp path
    (`.tmp_*.part`) and atomically renamed on completion. If `aiofiles` is
-   not available, falls back to synchronous I/O.
+   not available, falls back to synchronous I/O. After the file reaches
+   its final destination, permissions are set to `0o666` (world read/write)
+   to ensure *arr clients and other services can access the file regardless
+   of the process umask. If chmod fails (e.g., on restricted filesystems),
+   the error is logged at debug level and the download proceeds normally.
 5. **Move to category directory** (if configured): Downloaded files are moved
    from the incomplete directory to a category-specific subdirectory.
 6. **Insert into history immediately:** The completed job is inserted into the
@@ -511,6 +515,31 @@ history entry and re-submits the original URL to Torbox via `?mode=retry`.
 
 The `storage` field contains the CDN link (or local file path) that *arr uses
 to import the completed download.
+
+### Deleting Downloads
+
+*arr clients delete downloads using SABnzbd's sub-command pattern:
+
+```
+?mode=queue&name=delete&value=SABnzbd_nzo_XXX&del_files=1
+?mode=history&name=delete&value=SABnzbd_nzo_XXX&del_files=1
+```
+
+DebridNZBd routes these sub-commands to the shared `handle_delete` handler.
+The `value` parameter is mapped to `nzo_ids` for compatibility with the
+direct `?mode=delete&nzo_ids=XXX` endpoint.
+
+The `del_files` parameter controls file cleanup:
+
+| `del_files` | Behavior |
+|-------------|----------|
+| `0` (default) | Remove database entry only; local file stays on disk |
+| `1` | Remove database entry **and** delete the local file via `Path.unlink()`. The parent directory is **not** deleted. |
+
+Active (non-Complete/Failed) downloads are also canceled on Torbox when deleted.
+Completed downloads are kept on Torbox so the user retains access to their files.
+
+The same `del_files` parameter is accepted by `?mode=purge` for bulk cleanup.
 
 ### qBittorrent API Responses
 

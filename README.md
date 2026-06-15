@@ -92,6 +92,8 @@ docker compose up -d --build
 
 The container uses an entrypoint script that automatically fixes `/data` ownership on startup, so named Docker volumes work without manual configuration. The container starts as root to fix permissions (`chown -R`), then **always** runs `chmod -R a+rwX /data` as a safety net (since `chown` can silently fail on restricted filesystems like NFS, SMB/CIFS, returning exit code 0 without changing ownership). It then drops privileges to UID 1000 (`debridnzbd`) via `gosu` (with `setpriv`/`su` fallbacks).
 
+Downloaded files are set to `0o666` (world read/write) permissions to ensure *arr clients and other services can access them regardless of the process umask. If chmod fails on restricted filesystems, the error is logged and the download proceeds normally.
+
 **Do not set `--user` or `user:` in Docker/Docker Compose** — this would bypass the entrypoint's privilege drop and break volume ownership handling.
 
 For host bind mounts, ensure the directory is writable by UID 1000:
@@ -208,6 +210,8 @@ The qBittorrent API is available at `/api/v2/` and uses cookie-based SID authent
 Standard SABnzbd HTTP API for *arr client integration. Authentication uses API keys (`apikey` parameter).
 
 Key modes: `addurl`, `addfile`, `queue`, `pause`, `resume`, `delete`, `retry_stalled`, `history`, `status`, `get_config`, `set_config`
+
+The `delete` and `purge` modes accept a `del_files` parameter. When `del_files=1`, the downloaded file is removed from disk (but the parent directory is left intact, matching SABnzbd behavior). *arr clients send `?mode=queue&name=delete&value=NZO_ID&del_files=1` or `?mode=history&name=delete&value=NZO_ID&del_files=1` — DebridNZBd handles these sub-commands correctly.
 
 ### qBittorrent WebUI API (`/api/v2/...`)
 
