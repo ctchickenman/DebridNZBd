@@ -260,6 +260,7 @@ async def _do_download(url: str, dest_dir: str, filename: str | None) -> str | N
                 # Atomic rename from temp to final
                 try:
                     await asyncio.to_thread(temp_path.rename, final_path)
+                    logger.info("CDN download: renamed temp file %s → %s", temp_path.name, final_path.name)
                 except OSError:
                     # On some systems, rename across filesystems fails.
                     # Fall back to copy+delete.
@@ -269,6 +270,7 @@ async def _do_download(url: str, dest_dir: str, filename: str | None) -> str | N
                         final_path,
                     )
                     await asyncio.to_thread(shutil.copy2, str(temp_path), str(final_path))
+                    logger.info("CDN download: copied temp file %s → %s", temp_path.name, final_path.name)
                     await asyncio.to_thread(temp_path.unlink, missing_ok=True)
                     logger.info("CDN download: removed temp file %s", temp_path)
 
@@ -396,6 +398,7 @@ async def _do_download_sync(url: str, dest_dir: str, filename: str | None) -> st
                 # Atomic rename from temp to final
                 try:
                     temp_path.rename(final_path)
+                    logger.info("CDN download: renamed temp file %s → %s", temp_path.name, final_path.name)
                 except OSError:
                     # On some systems, rename across filesystems fails.
                     # Fall back to copy+delete.
@@ -405,6 +408,7 @@ async def _do_download_sync(url: str, dest_dir: str, filename: str | None) -> st
                         final_path,
                     )
                     shutil.copy2(str(temp_path), str(final_path))
+                    logger.info("CDN download: copied temp file %s → %s", temp_path.name, final_path.name)
                     temp_path.unlink(missing_ok=True)
                     logger.info("CDN download: removed temp file %s", temp_path)
 
