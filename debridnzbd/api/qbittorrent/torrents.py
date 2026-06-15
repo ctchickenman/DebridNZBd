@@ -413,7 +413,15 @@ async def torrents_delete(
     db: Database = Depends(get_db),
     config: ConfigStore = Depends(get_config),
 ):
-    """Delete torrents by hash. Also cancels on Torbox side."""
+    """Delete torrents by hash.
+
+    Only cancels ACTIVE downloads on Torbox (still downloading/queued).
+    Completed/failed downloads are kept on Torbox so the user retains
+    access to their files.
+
+    If ``deleteFiles=true``, also removes the local downloaded file
+    from disk (matching real qBittorrent behavior).
+    """
     form = await request.form()
     hashes = _parse_hashes(str(form.get("hashes", "")))
     delete_files = str(form.get("deleteFiles", "")).lower() in ("true", "1")
@@ -437,15 +445,18 @@ async def torrents_delete(
         )
         rows = await cursor.fetchall()
 
-    # Cancel on Torbox side and collect nzo_ids for deletion
+    # Cancel ACTIVE downloads on Torbox and collect nzo_ids for deletion.
+    # Only cancel downloads that are still in progress — completed/failed
+    # downloads are kept on Torbox so the user retains access.
     nzo_ids = []
     for row in rows:
         nzo_id = row[0]
+        status = row[5]
         torbox_id = row[11]
         torbox_type = row[12]
         nzo_ids.append(nzo_id)
 
-        if torbox_id and torbox_api_key:
+        if torbox_id and torbox_api_key and status not in ("Complete", "Failed"):
             try:
                 client = TorboxClient(api_key=torbox_api_key, base_url=base_url)
                 if torbox_type == "torrent":
@@ -455,8 +466,22 @@ async def torrents_delete(
                 elif torbox_type == "webdl":
                     await client.control_web_download(int(torbox_id), "Delete")
                 await client.close()
+                logger.info("qbit delete: cancelled active Torbox %s id=%s", torbox_type, torbox_id)
             except Exception:
-                logger.warning("Failed to delete torbox_id=%s (type=%s)", torbox_id, torbox_type, exc_info=True)
+                logger.warning("Failed to cancel torbox_id=%s (type=%s)", torbox_id, torbox_type, exc_info=True)
+
+        # If deleteFiles=true, remove the local downloaded file from disk
+        if delete_files and status in ("Complete", "Fetching"):
+            local_path = row[17] if len(row) > 17 else ""
+            if local_path and not local_path.startswith(("http://", "https://")):
+                try:
+                    from pathlib import Path as PathLib
+                    p = PathLib(local_path)
+                    if p.exists():
+                        p.unlink()
+                        logger.info("qbit delete: removed local file %s", local_path)
+                except Exception:
+                    logger.warning("qbit delete: failed to remove %s", local_path, exc_info=True)
 
     # Delete from database
     if nzo_ids:

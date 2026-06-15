@@ -2210,24 +2210,33 @@ async def handle_delete(params: dict) -> JSONResponse:
     if not nzo_ids:
         return JSONResponse(content={"status": True})
 
-    # Look up torbox_id and torbox_type for each entry so we can cancel
-    # the download on the Torbox side before deleting the local record.
+    # Look up torbox_id, torbox_type, and status for each entry so we can
+    # cancel ACTIVE downloads on the Torbox side. Completed/failed downloads
+    # should NOT be deleted from Torbox — the user's files must remain
+    # accessible. Only cancel downloads that are still in progress.
     # We check both the jobs and history tables since delete can come from
     # either the queue page or the history page.
     torbox_entries: list[tuple[str, str]] = []  # (torbox_id, torbox_type)
     placeholders = ",".join(["?"] * len(nzo_ids))
 
     for table in ("jobs", "history"):
-        cursor = await db.conn.execute(
-            f"SELECT torbox_id, torbox_type FROM {table} "
-            f"WHERE nzo_id IN ({placeholders}) AND torbox_id IS NOT NULL AND torbox_id != ''",
-            nzo_ids,
-        )
+        if table == "jobs":
+            cursor = await db.conn.execute(
+                f"SELECT torbox_id, torbox_type FROM {table} "
+                f"WHERE nzo_id IN ({placeholders}) AND torbox_id IS NOT NULL AND torbox_id != '' "
+                f"AND status NOT IN ('Complete', 'Failed')",
+                nzo_ids,
+            )
+        else:
+            # History entries are by definition completed/failed — never
+            # cancel them on Torbox.
+            continue
         for row in await cursor.fetchall():
             torbox_entries.append((str(row[0]), row[1]))
 
-    # Cancel downloads on the Torbox side.
-    # We do this before deleting local records so we still have the IDs.
+    # Cancel ACTIVE downloads on the Torbox side.
+    # We only cancel downloads that are still in progress — completed/failed
+    # downloads are kept on Torbox so the user retains access to their files.
     # Failures are logged but don't block the local deletion — the download
     # may have already been removed on the Torbox side, or the API may be
     # temporarily unavailable.
@@ -2246,7 +2255,7 @@ async def handle_delete(params: dict) -> JSONResponse:
                             await client.control_torrent(dl_id, "Delete")
                         elif torbox_type == "webdl":
                             await client.control_web_download(dl_id, "Delete")
-                        logger.info("delete: cancelled Torbox %s id=%s", torbox_type, torbox_id)
+                        logger.info("delete: cancelled active Torbox %s id=%s", torbox_type, torbox_id)
                     except (TorboxError, TorboxAuthError, TorboxConnectionError) as e:
                         logger.warning("delete: failed to cancel Torbox %s id=%s: %s", torbox_type, torbox_id, e)
                     except Exception:
