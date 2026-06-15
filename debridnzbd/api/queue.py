@@ -1688,9 +1688,10 @@ async def handle_addfile(params: dict) -> JSONResponse:
 async def handle_queue(params: dict) -> JSONResponse:
     """Handle ?mode=queue — return the current download queue.
 
-    Returns a SABnzbd-compatible queue response with slot details,
-    speed, size, and time estimates. *arr clients poll this endpoint
-    to track download progress.
+    Also dispatches SABnzbd sub-commands sent as ?mode=queue&name=XXX.
+    When *arr clients want to delete a queue item they send
+    ``?mode=queue&name=delete&value=NZO_ID&del_files=1`` — this handler
+    delegates to :func:`handle_delete` for that case.
 
     Parameters:
         start: Start index for pagination (default 0)
@@ -1698,10 +1699,20 @@ async def handle_queue(params: dict) -> JSONResponse:
         sort: Sort field (ignored, always returns by position)
         dir: Sort direction (ignored)
         search: Filter by filename (not yet implemented)
+        name: Sub-command (e.g. "delete" for ?mode=queue&name=delete)
 
     Returns:
-        JSONResponse with nested queue structure matching SABnzbd format.
+        JSONResponse with nested queue structure matching SABnzbd format,
+        or the result of the sub-command handler.
     """
+    # SABnzbd sub-command dispatch: ?mode=queue&name=delete&value=NZO_ID
+    name_sub = params.get("name")
+    if name_sub == "delete":
+        delete_params = dict(params)
+        if not delete_params.get("nzo_ids") and params.get("value"):
+            delete_params["nzo_ids"] = params["value"]
+        return await handle_delete(delete_params)
+
     request = params.get("request")
     db = getattr(request.app.state, "db", None) if request else None
     config = getattr(request.app.state, "config", None) if request else None
@@ -2191,9 +2202,14 @@ async def handle_delete(params: dict) -> JSONResponse:
     corresponding download on the Torbox side so it doesn't continue
     consuming resources.
 
+    When ``del_files=1``, also removes the downloaded file from disk
+    (via :meth:`Path.unlink`). The parent directory is **not** deleted —
+    this matches SABnzbd behavior where *arr clients send ``del_files=1``
+    to clean up files after importing but expect the directory to remain.
+
     Parameters:
         nzo_ids: Comma-separated list of nzo_ids to delete
-        del_files: Whether to also delete downloaded files (ignored in DebridNZBd)
+        del_files: Whether to also delete downloaded files (0 or 1)
 
     Returns:
         JSONResponse with status True.
@@ -2263,6 +2279,37 @@ async def handle_delete(params: dict) -> JSONResponse:
             finally:
                 await client.close()
 
+    # If del_files is set, remove downloaded files from disk but keep
+    # directories intact.  This matches SABnzbd behavior: *arr sends
+    # del_files=1 to clean up files after importing, but the directory
+    # is left alone so other files in it aren't affected.
+    del_files_flag = int(params.get("del_files") or 0)
+    if del_files_flag:
+        for table in ("jobs", "history"):
+            # Jobs table uses 'local_path', history uses 'storage'
+            path_col = "local_path" if table == "jobs" else "storage"
+            cursor = await db.conn.execute(
+                f"SELECT nzo_id, {path_col} FROM {table} "
+                f"WHERE nzo_id IN ({placeholders})",
+                nzo_ids,
+            )
+            for row in await cursor.fetchall():
+                local_path = row[1] or ""
+                if local_path and not local_path.startswith(("http://", "https://")):
+                    try:
+                        p = Path(local_path)
+                        if p.exists():
+                            p.unlink()
+                            logger.info(
+                                "delete: removed local file %s for nzo_id=%s",
+                                local_path, row[0],
+                            )
+                    except Exception:
+                        logger.warning(
+                            "delete: failed to remove %s for nzo_id=%s",
+                            local_path, row[0], exc_info=True,
+                        )
+
     # Delete from local database
     await db.conn.execute(
         f"DELETE FROM jobs WHERE nzo_id IN ({placeholders})",
@@ -2288,8 +2335,12 @@ async def handle_purge(params: dict) -> JSONResponse:
     Also cancels the corresponding downloads on the Torbox side for
     any purged entries that have a torbox_id.
 
+    When ``del_files=1``, also removes downloaded files from disk
+    (via :meth:`Path.unlink`). The parent directory is **not** deleted.
+
     Parameters:
         failed_only: If "1", only delete failed history entries
+        del_files: Whether to also delete downloaded files (0 or 1)
 
     Returns:
         JSONResponse with status True.
@@ -2299,6 +2350,7 @@ async def handle_purge(params: dict) -> JSONResponse:
     config = getattr(request.app.state, "config", None) if request else None
 
     failed_only = int(params.get("failed_only") or 0)
+    del_files_flag = int(params.get("del_files") or 0)
 
     if not db or not db.conn:
         return JSONResponse(content={"status": True})
@@ -2337,6 +2389,44 @@ async def handle_purge(params: dict) -> JSONResponse:
                         logger.warning("purge: unexpected error cancelling Torbox %s id=%s", torbox_type, torbox_id, exc_info=True)
             finally:
                 await client.close()
+
+    # If del_files is set, remove downloaded files from disk but keep
+    # directories intact.  Same behavior as handle_delete.
+    if del_files_flag:
+        for table in ("jobs", "history"):
+            if table == "jobs":
+                query = (
+                    "SELECT nzo_id, local_path FROM jobs "
+                    "WHERE status IN ('Complete', 'Failed') AND local_path IS NOT NULL AND local_path != ''"
+                )
+            else:
+                if failed_only:
+                    query = (
+                        "SELECT nzo_id, storage AS local_path FROM history "
+                        "WHERE status = 'Failed' AND storage IS NOT NULL AND storage != ''"
+                    )
+                else:
+                    query = (
+                        "SELECT nzo_id, storage AS local_path FROM history "
+                        "WHERE storage IS NOT NULL AND storage != ''"
+                    )
+            cursor = await db.conn.execute(query)
+            for row in await cursor.fetchall():
+                local_path = row[1] or ""
+                if local_path and not local_path.startswith(("http://", "https://")):
+                    try:
+                        p = Path(local_path)
+                        if p.exists():
+                            p.unlink()
+                            logger.info(
+                                "purge: removed local file %s for nzo_id=%s",
+                                local_path, row[0],
+                            )
+                    except Exception:
+                        logger.warning(
+                            "purge: failed to remove %s for nzo_id=%s",
+                            local_path, row[0], exc_info=True,
+                        )
 
     # Delete from local database
     await db.conn.execute(

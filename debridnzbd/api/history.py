@@ -24,8 +24,10 @@ BYTES_PER_MB = 1048576
 async def handle_history(params: dict) -> JSONResponse:
     """Handle ?mode=history — return completed/failed download history.
 
-    Returns a SABnzbd-compatible history response with slot details.
-    *arr clients poll this endpoint to detect download completion.
+    Also dispatches SABnzbd sub-commands sent as ?mode=history&name=XXX.
+    When *arr clients want to delete a history item they send
+    ``?mode=history&name=delete&value=NZO_ID&del_files=1`` — this handler
+    delegates to :func:`handle_delete` for that case.
 
     Parameters:
         start: Start index for pagination (default 0)
@@ -34,10 +36,21 @@ async def handle_history(params: dict) -> JSONResponse:
         failed_only: Show only failed downloads (0 or 1)
         cat / category: Filter by category
         last_history_update: Only return entries newer than this timestamp
+        name: Sub-command (e.g. "delete" for ?mode=history&name=delete)
 
     Returns:
-        JSONResponse with nested history structure matching SABnzbd format.
+        JSONResponse with nested history structure matching SABnzbd format,
+        or the result of the sub-command handler.
     """
+    # SABnzbd sub-command dispatch: ?mode=history&name=delete&value=NZO_ID
+    name_sub = params.get("name")
+    if name_sub == "delete":
+        from debridnzbd.api.queue import handle_delete
+        delete_params = dict(params)
+        if not delete_params.get("nzo_ids") and params.get("value"):
+            delete_params["nzo_ids"] = params["value"]
+        return await handle_delete(delete_params)
+
     request = params.get("request")
     db = getattr(request.app.state, "db", None) if request else None
     config = getattr(request.app.state, "config", None) if request else None
