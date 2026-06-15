@@ -168,7 +168,10 @@ async def _do_download(url: str, dest_dir: str, filename: str | None) -> str | N
     # Resolve to absolute path so the return value is usable from anywhere
     dest_path = Path(dest_dir).resolve()
     try:
+        created = not dest_path.exists()
         dest_path.mkdir(parents=True, exist_ok=True)
+        if created:
+            logger.info("CDN download: created directory %s", dest_path)
     except OSError as e:
         logger.error("CDN download: failed to create directory %s: %s", dest_dir, e)
         return None
@@ -242,6 +245,7 @@ async def _do_download(url: str, dest_dir: str, filename: str | None) -> str | N
                     # Clean up partial download
                     try:
                         await asyncio.to_thread(temp_path.unlink, missing_ok=True)
+                        logger.info("CDN download: removed partial temp file %s", temp_path)
                     except OSError:
                         pass
                     raise
@@ -260,8 +264,13 @@ async def _do_download(url: str, dest_dir: str, filename: str | None) -> str | N
                     # On some systems, rename across filesystems fails.
                     # Fall back to copy+delete.
                     import shutil
+                    logger.info(
+                        "CDN download: rename failed, falling back to copy for %s",
+                        final_path,
+                    )
                     await asyncio.to_thread(shutil.copy2, str(temp_path), str(final_path))
                     await asyncio.to_thread(temp_path.unlink, missing_ok=True)
+                    logger.info("CDN download: removed temp file %s", temp_path)
 
                 # Set world-readable permissions so *arr clients and other
                 # services can access the downloaded file regardless of umask.
@@ -296,7 +305,10 @@ async def _do_download_sync(url: str, dest_dir: str, filename: str | None) -> st
     # Resolve to absolute path so the return value is usable from anywhere
     dest_path = Path(dest_dir).resolve()
     try:
+        created = not dest_path.exists()
         dest_path.mkdir(parents=True, exist_ok=True)
+        if created:
+            logger.info("CDN download: created directory %s", dest_path)
     except OSError as e:
         logger.error("CDN download: failed to create directory %s: %s", dest_dir, e)
         return None
@@ -369,6 +381,7 @@ async def _do_download_sync(url: str, dest_dir: str, filename: str | None) -> st
                     # Clean up partial download
                     try:
                         temp_path.unlink(missing_ok=True)
+                        logger.info("CDN download: removed partial temp file %s", temp_path)
                     except OSError:
                         pass
                     raise
@@ -387,8 +400,13 @@ async def _do_download_sync(url: str, dest_dir: str, filename: str | None) -> st
                     # On some systems, rename across filesystems fails.
                     # Fall back to copy+delete.
                     import shutil
+                    logger.info(
+                        "CDN download: rename failed, falling back to copy for %s",
+                        final_path,
+                    )
                     shutil.copy2(str(temp_path), str(final_path))
                     temp_path.unlink(missing_ok=True)
+                    logger.info("CDN download: removed temp file %s", temp_path)
 
                 # Set world-readable permissions so *arr clients and other
                 # services can access the downloaded file regardless of umask.
@@ -487,7 +505,10 @@ async def move_to_category_dir(
 
     # Create the target directory if it doesn't exist
     try:
+        created = not final_dir.exists()
         final_dir.mkdir(parents=True, exist_ok=True)
+        if created:
+            logger.info("CDN download: created directory %s", final_dir)
     except OSError as e:
         logger.error("CDN download: failed to create directory %s: %s", final_dir, e)
         return None
